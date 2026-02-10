@@ -33,7 +33,7 @@ interface OpponentTeam {
   matches: MatchSummary[]
 }
 
-export function OpponentsList({ opponents }: { opponents: OpponentTeam[] }) {
+export function OpponentsList({ opponents, readOnly = false }: { opponents: OpponentTeam[]; readOnly?: boolean }) {
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editingOpponent, setEditingOpponent] = useState<OpponentTeam | null>(null)
   const [name, setName] = useState('')
@@ -116,12 +116,14 @@ export function OpponentsList({ opponents }: { opponents: OpponentTeam[] }) {
           <h1 className="text-lg font-semibold text-foreground">Adversarios</h1>
           <p className="text-sm text-muted-foreground">{opponents.length} {opponents.length === 1 ? 'time cadastrado' : 'times cadastrados'}</p>
         </div>
-        <Button onClick={handleAdd} size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-1.5">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-          Adicionar
-        </Button>
+        {!readOnly && (
+          <Button onClick={handleAdd} size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-1.5">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            Adicionar
+          </Button>
+        )}
       </div>
 
       {opponents.length === 0 ? (
@@ -131,9 +133,11 @@ export function OpponentsList({ opponents }: { opponents: OpponentTeam[] }) {
             <rect x="6" y="4" width="12" height="10" rx="2" stroke="currentColor" strokeWidth="1.5" />
           </svg>
           <p className="text-sm text-muted-foreground">Nenhum adversario cadastrado</p>
-          <Button onClick={handleAdd} variant="ghost" size="sm" className="mt-2 text-primary hover:text-primary">
-            Cadastrar primeiro adversario
-          </Button>
+          {!readOnly && (
+            <Button onClick={handleAdd} variant="ghost" size="sm" className="mt-2 text-primary hover:text-primary">
+              Cadastrar primeiro adversario
+            </Button>
+          )}
         </div>
       ) : (
         <div className="flex flex-col gap-2">
@@ -154,81 +158,87 @@ export function OpponentsList({ opponents }: { opponents: OpponentTeam[] }) {
                     <p className="text-xs text-muted-foreground">Nenhum jogo registrado</p>
                   )}
                 </div>
-                <div className="flex shrink-0 items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                    onClick={() => handleEdit(opponent)}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
-                      <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
-                    </svg>
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                    onClick={() => setDeleteId(opponent.id)}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polyline points="3 6 5 6 21 6" />
-                      <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
-                    </svg>
-                  </Button>
-                </div>
+                {!readOnly && (
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                      onClick={() => handleEdit(opponent)}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                      </svg>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      onClick={() => setDeleteId(opponent.id)}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                      </svg>
+                    </Button>
+                  </div>
+                )}
               </div>
             )
           })}
         </div>
       )}
 
-      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent side="bottom" className="bg-background border-border rounded-t-2xl">
-          <SheetHeader className="mb-4">
-            <SheetTitle className="text-foreground">{editingOpponent ? 'Editar adversario' : 'Novo adversario'}</SheetTitle>
-          </SheetHeader>
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="opp-name" className="text-muted-foreground">Nome do time</Label>
-              <Input
-                id="opp-name"
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="h-11 bg-secondary border-border"
-                placeholder="Ex: Os Boleiros FC"
-              />
-            </div>
-            <div className="flex gap-3 pt-2">
-              <Button type="button" variant="outline" className="flex-1 h-11 border-border text-muted-foreground bg-transparent" onClick={() => setSheetOpen(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit" className="flex-1 h-11 bg-primary text-primary-foreground hover:bg-primary/90" disabled={isLoading}>
-                {isLoading ? 'Salvando...' : (editingOpponent ? 'Atualizar' : 'Cadastrar')}
-              </Button>
-            </div>
-          </form>
-        </SheetContent>
-      </Sheet>
+      {!readOnly && (
+        <>
+          <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+            <SheetContent side="bottom" className="bg-background border-border rounded-t-2xl">
+              <SheetHeader className="mb-4">
+                <SheetTitle className="text-foreground">{editingOpponent ? 'Editar adversario' : 'Novo adversario'}</SheetTitle>
+              </SheetHeader>
+              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="opp-name" className="text-muted-foreground">Nome do time</Label>
+                  <Input
+                    id="opp-name"
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="h-11 bg-secondary border-border"
+                    placeholder="Ex: Os Boleiros FC"
+                  />
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <Button type="button" variant="outline" className="flex-1 h-11 border-border text-muted-foreground bg-transparent" onClick={() => setSheetOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button type="submit" className="flex-1 h-11 bg-primary text-primary-foreground hover:bg-primary/90" disabled={isLoading}>
+                    {isLoading ? 'Salvando...' : (editingOpponent ? 'Atualizar' : 'Cadastrar')}
+                  </Button>
+                </div>
+              </form>
+            </SheetContent>
+          </Sheet>
 
-      <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
-        <AlertDialogContent className="bg-card border-border max-w-sm">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-foreground">Excluir adversario?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Essa acao nao pode ser desfeita. Todas as partidas contra esse time tambem serao excluidas.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="border-border text-muted-foreground">Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Excluir
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+          <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
+            <AlertDialogContent className="bg-card border-border max-w-sm">
+              <AlertDialogHeader>
+                <AlertDialogTitle className="text-foreground">Excluir adversario?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Essa acao nao pode ser desfeita. Todas as partidas contra esse time tambem serao excluidas.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel className="border-border text-muted-foreground">Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  Excluir
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </>
+      )}
     </>
   )
 }
