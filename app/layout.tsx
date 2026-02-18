@@ -1,12 +1,20 @@
 import React from "react"
 import type { Metadata, Viewport } from 'next'
-import { Inter } from 'next/font/google'
+import { Montserrat, Playfair_Display } from 'next/font/google'
 import { Toaster } from 'sonner'
 import { Analytics } from '@vercel/analytics/next'
 
 import './globals.css'
 
-const _inter = Inter({ subsets: ['latin'] })
+const montserrat = Montserrat({
+  subsets: ['latin'],
+  variable: '--font-sans',
+})
+
+const playfair = Playfair_Display({
+  subsets: ['latin'],
+  variable: '--font-serif',
+})
 
 export const metadata: Metadata = {
   title: 'Meu Time - Estatisticas de Futebol',
@@ -14,7 +22,7 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor: '#111114',
+  themeColor: '#f5f0f0',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
@@ -28,16 +36,16 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
-      <body className="font-sans antialiased">
+      <body className={`${montserrat.variable} ${playfair.variable} font-sans antialiased`}>
         {children}
         <Analytics />
         <Toaster
           position="top-center"
           toastOptions={{
             style: {
-              background: 'hsl(240 5% 10%)',
-              border: '1px solid hsl(240 4% 16%)',
-              color: 'hsl(0 0% 95%)',
+              background: 'oklch(1.0000 0 0)',
+              border: '1px solid oklch(0.8690 0.0198 252.8943)',
+              color: 'oklch(0.2151 0.0518 259.4035)',
             },
           }}
         />
