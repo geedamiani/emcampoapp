@@ -35,7 +35,7 @@ interface PlayerStats {
   inNegotiation: boolean
 }
 
-export function PlayersList({ players, autoOpen = false }: { players: PlayerStats[]; autoOpen?: boolean }) {
+export function PlayersList({ players, ownerId, autoOpen = false }: { players: PlayerStats[]; ownerId: string; autoOpen?: boolean }) {
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editingPlayer, setEditingPlayer] = useState<PlayerStats | undefined>(undefined)
   const [deleteId, setDeleteId] = useState<string | null>(null)
@@ -60,9 +60,9 @@ export function PlayersList({ players, autoOpen = false }: { players: PlayerStat
     const supabase = createClient()
     const { error } = await supabase.from('players').delete().eq('id', deleteId)
     if (error) {
-      toast.error('Erro ao excluir jogador. Verifique se nao ha eventos vinculados.')
+      toast.error('Erro ao excluir jogador. Verifique se não há eventos vinculados.')
     } else {
-      toast.success('Jogador excluido')
+      toast.success('Jogador excluído')
       refreshData()
     }
     setDeleteId(null)
@@ -118,11 +118,11 @@ export function PlayersList({ players, autoOpen = false }: { players: PlayerStat
                     <p className="truncate text-sm font-medium text-foreground">{player.name}</p>
                     {player.inNegotiation && (
                       <span className="shrink-0 rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-semibold text-destructive">
-                        Em negociacao
+                        Em negociação
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground">{player.position || 'Sem posicao'}</p>
+                  <p className="text-xs text-muted-foreground">{player.position || 'Sem posição'}</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
                   <Button
@@ -157,12 +157,12 @@ export function PlayersList({ players, autoOpen = false }: { players: PlayerStat
                   <p className="text-sm font-bold text-foreground">{player.matches_played}</p>
                 </div>
                 <div className="rounded-lg bg-secondary/60 py-1.5 px-1">
-                  <p className="text-xs text-muted-foreground">Presenca</p>
+                  <p className="text-xs text-muted-foreground">Presença</p>
                   <p className="text-sm font-bold text-foreground">{pct(player.matches_played, player.total_matches)}</p>
                 </div>
                 <div className="rounded-lg bg-secondary/60 py-1.5 px-1">
                   <p className="text-xs text-muted-foreground">Titular</p>
-                  <p className="text-sm font-bold text-foreground">{pct(player.matches_starter, player.total_matches)}</p>
+                  <p className="text-sm font-bold text-foreground">{pct(player.matches_starter, player.matches_played)}</p>
                 </div>
                 <div className="rounded-lg bg-secondary/60 py-1.5 px-1">
                   <p className="text-xs text-muted-foreground">Gols</p>
@@ -195,6 +195,7 @@ export function PlayersList({ players, autoOpen = false }: { players: PlayerStat
           </SheetHeader>
           <PlayerForm
             player={editingPlayer ? { id: editingPlayer.id, name: editingPlayer.name, position: editingPlayer.position, whatsapp: editingPlayer.whatsapp } : undefined}
+            ownerId={ownerId}
             onClose={() => setSheetOpen(false)}
             onRefresh={refreshData}
           />
@@ -206,7 +207,7 @@ export function PlayersList({ players, autoOpen = false }: { players: PlayerStat
           <AlertDialogHeader>
             <AlertDialogTitle className="text-foreground">Excluir jogador?</AlertDialogTitle>
             <AlertDialogDescription>
-              Essa acao nao pode ser desfeita. Todos os eventos vinculados a esse jogador tambem serao excluidos.
+              Essa ação não pode ser desfeita. Todos os eventos vinculados a esse jogador também serão excluídos.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

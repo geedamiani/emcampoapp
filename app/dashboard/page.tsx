@@ -1,8 +1,16 @@
+/**
+ * DASHBOARD (Painel Geral)
+ *
+ * Shows overview stats for the current account:
+ * aproveitamento, saldo de gols, artilheiros, assistências, cartões, últimas partidas.
+ *
+ * Uses players!match_events_player_id_fkey because match_events has two FKs to players.
+ */
 import { createClient } from '@/lib/supabase/server'
 import { StatCard } from '@/components/stat-card'
 import { RankingList } from '@/components/ranking-list'
 import { RecentMatches } from '@/components/recent-matches'
-import { seedIfEmpty } from '@/lib/seed'
+import { getEffectiveOwnerId } from '@/lib/get-effective-owner'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -11,21 +19,18 @@ export default async function DashboardPage() {
     const { redirect } = await import('next/navigation')
     redirect('/auth/login')
   }
-  const userId = user.id
-
-  await seedIfEmpty(supabase, userId)
+  const userId = await getEffectiveOwnerId(supabase, user.id)
 
   const [
     { data: matches },
     { data: events },
-    { data: matchPlayers },
-    { data: allPlayers },
+    { data: players },
   ] = await Promise.all([
-    supabase.from('matches').select('*, opponent_teams(name)').order('match_date', { ascending: false }),
-    supabase.from('match_events').select('*, players(name)'),
-    supabase.from('match_players').select('player_id, match_id, starter'),
+    supabase.from('matches').select('*, opponent_teams(name)').eq('user_id', userId).order('match_date', { ascending: false }),
+    supabase.from('match_events').select('*, players!match_events_player_id_fkey(name)').eq('user_id', userId),
     supabase.from('players').select('id, name').eq('user_id', userId),
   ])
+  const playerNameById = Object.fromEntries((players || []).map(p => [p.id, p.name]))
 
   const totalMatches = matches?.length || 0
   const wins = matches?.filter(m => m.goals_for > m.goals_against).length || 0
@@ -52,6 +57,11 @@ export default async function DashboardPage() {
     if (ev.event_type === 'goal') {
       if (!goalsByPlayer[key]) goalsByPlayer[key] = { name: pName, count: 0 }
       goalsByPlayer[key].count++
+      if (ev.assistant_id) {
+        const aName = playerNameById[ev.assistant_id] || 'Desconhecido'
+        if (!assistsByPlayer[ev.assistant_id]) assistsByPlayer[ev.assistant_id] = { name: aName, count: 0 }
+        assistsByPlayer[ev.assistant_id].count++
+      }
     } else if (ev.event_type === 'assist') {
       if (!assistsByPlayer[key]) assistsByPlayer[key] = { name: pName, count: 0 }
       assistsByPlayer[key].count++
@@ -61,35 +71,6 @@ export default async function DashboardPage() {
     } else if (ev.event_type === 'red_card') {
       if (!redsByPlayer[key]) redsByPlayer[key] = { name: pName, count: 0 }
       redsByPlayer[key].count++
-    }
-  }
-
-  // Most/least called up players
-  const sortedMatches = [...(matches || [])].sort((a, b) => new Date(b.match_date).getTime() - new Date(a.match_date).getTime())
-  const last5MatchIds = sortedMatches.slice(0, 5).map(m => m.id)
-
-  const callupsByPlayer: Record<string, number> = {}
-  for (const mp of matchPlayers || []) {
-    callupsByPlayer[mp.player_id] = (callupsByPlayer[mp.player_id] || 0) + 1
-  }
-
-  const mostCalledUp = (allPlayers || [])
-    .map(p => ({ name: p.name, value: callupsByPlayer[p.id] || 0 }))
-    .filter(p => p.value > 0)
-    .sort((a, b) => b.value - a.value)
-
-  // "Em negociacao" - players not called up in the last 5 matches
-  const emNegociacao: { name: string; value: number }[] = []
-  if (last5MatchIds.length >= 5) {
-    const last5PlayerIds = new Set(
-      (matchPlayers || [])
-        .filter(mp => last5MatchIds.includes(mp.match_id))
-        .map(mp => mp.player_id)
-    )
-    for (const p of allPlayers || []) {
-      if (!last5PlayerIds.has(p.id)) {
-        emNegociacao.push({ name: p.name, value: 5 })
-      }
     }
   }
 
@@ -109,7 +90,7 @@ export default async function DashboardPage() {
   return (
     <div className="mx-auto max-w-lg px-4 py-5">
       <div className="mb-5">
-        <h1 className="text-lg font-semibold text-foreground">Painel geral</h1>
+        <h1 className="text-lg font-semibold text-foreground">Painel Geral</h1>
         <p className="text-sm text-muted-foreground">
           {teamName} &middot; {totalMatches} {totalMatches === 1 ? 'partida' : 'partidas'} &middot; {wins}V {draws}E {losses}D
         </p>
@@ -167,25 +148,13 @@ export default async function DashboardPage() {
       {/* Artilheiros + Assistencias side by side */}
       <div className="grid grid-cols-2 gap-3 mb-3">
         <RankingList title="Artilheiros" items={toRanking(goalsByPlayer)} accent="primary" emptyMessage="Sem gols" />
-        <RankingList title="Assistencias" items={toRanking(assistsByPlayer)} accent="primary" emptyMessage="Sem assist." />
+        <RankingList title="Assistências" items={toRanking(assistsByPlayer)} accent="primary" emptyMessage="Sem assistências" />
       </div>
 
       {/* Amarelos + Vermelhos side by side */}
       <div className="grid grid-cols-2 gap-3 mb-6">
-        <RankingList title="C. amarelos" items={toRanking(yellowsByPlayer)} accent="warning" emptyMessage="Sem cartoes" />
-        <RankingList title="C. vermelhos" items={toRanking(redsByPlayer)} accent="destructive" emptyMessage="Sem cartoes" />
-      </div>
-
-      {/* Mais escalados + Em negociacao side by side */}
-      <div className="grid grid-cols-2 gap-3 mb-6">
-        <RankingList title="Mais escalados" items={mostCalledUp} accent="primary" emptyMessage="Sem dados" />
-        <RankingList
-          title="Em negociacao"
-          items={emNegociacao}
-          accent="destructive"
-          emptyMessage="Todos presentes"
-          valueLabel="faltas"
-        />
+        <RankingList title="C. amarelos" items={toRanking(yellowsByPlayer)} accent="warning" emptyMessage="Sem cartões" />
+        <RankingList title="C. vermelhos" items={toRanking(redsByPlayer)} accent="destructive" emptyMessage="Sem cartões" />
       </div>
 
       {/* Recent matches */}

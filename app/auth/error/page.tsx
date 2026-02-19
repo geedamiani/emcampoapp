@@ -21,7 +21,7 @@ export default async function AuthErrorPage({
         <p className="mt-2 text-muted-foreground">
           {params?.error
             ? `Erro: ${params.error}`
-            : 'Ocorreu um erro inesperado na autenticacao.'}
+            : 'Ocorreu um erro inesperado na autenticação.'}
         </p>
         <Button asChild className="mt-6 h-11 w-full bg-primary text-primary-foreground hover:bg-primary/90">
           <Link href="/auth/login">Voltar para login</Link>

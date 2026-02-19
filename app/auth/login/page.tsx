@@ -1,21 +1,23 @@
 'use client'
 
-import React from "react"
+import React, { Suspense } from "react"
 
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useState } from 'react'
 
-export default function LoginPage() {
+function LoginForm() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const redirectTo = searchParams.get('redirect') || '/dashboard'
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -29,7 +31,7 @@ export default function LoginPage() {
         password,
       })
       if (error) throw error
-      router.push('/dashboard')
+      router.push(redirectTo)
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : 'Ocorreu um erro')
     } finally {
@@ -50,7 +52,7 @@ export default function LoginPage() {
             </svg>
           </div>
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">Meu Time</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Entre para acompanhar as estatisticas</p>
+          <p className="mt-1 text-sm text-muted-foreground">Entre para acompanhar as estatísticas</p>
         </div>
         <form onSubmit={handleLogin} className="flex flex-col gap-4">
           <div className="grid gap-2">
@@ -81,7 +83,7 @@ export default function LoginPage() {
             {isLoading ? 'Entrando...' : 'Entrar'}
           </Button>
           <p className="text-center text-sm text-muted-foreground">
-            {'Nao tem conta? '}
+            {'Não tem conta? '}
             <Link href="/auth/sign-up" className="text-primary underline-offset-4 hover:underline">
               Criar conta
             </Link>
@@ -89,5 +91,17 @@ export default function LoginPage() {
         </form>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-svh w-full items-center justify-center p-6">
+        <div className="mx-auto h-12 w-12 animate-spin rounded-full border-2 border-muted-foreground border-t-primary" />
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   )
 }

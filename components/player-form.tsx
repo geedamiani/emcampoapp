@@ -27,11 +27,12 @@ interface PlayerFormProps {
     position: string | null
     whatsapp: string | null
   }
+  ownerId: string
   onClose: () => void
   onRefresh?: () => void
 }
 
-export function PlayerForm({ player, onClose, onRefresh }: PlayerFormProps) {
+export function PlayerForm({ player, ownerId, onClose, onRefresh }: PlayerFormProps) {
   const [name, setName] = useState(player?.name || '')
   const [position, setPosition] = useState(player?.position || '')
   const [whatsapp, setWhatsapp] = useState(player?.whatsapp || '')
@@ -44,13 +45,12 @@ export function PlayerForm({ player, onClose, onRefresh }: PlayerFormProps) {
     setIsLoading(true)
 
     const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
 
     const payload = {
       name,
       position: position || null,
       whatsapp: whatsapp || null,
-      user_id: user!.id,
+      user_id: ownerId,
     }
 
     if (isEditing) {
@@ -89,10 +89,10 @@ export function PlayerForm({ player, onClose, onRefresh }: PlayerFormProps) {
         />
       </div>
       <div className="grid gap-2">
-        <Label className="text-muted-foreground">Posicao</Label>
+        <Label className="text-muted-foreground">Posição</Label>
         <Select value={position} onValueChange={setPosition} required>
           <SelectTrigger className="h-11 bg-secondary border-border">
-            <SelectValue placeholder="Selecione a posicao" />
+            <SelectValue placeholder="Selecione a posição" />
           </SelectTrigger>
           <SelectContent className="bg-card border-border">
             {positions.map(p => (

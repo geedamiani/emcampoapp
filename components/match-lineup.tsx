@@ -1,11 +1,25 @@
+/**
+ * MATCH LINEUP COMPONENT
+ *
+ * Opened from the Partidas page when you click "Editar escalação".
+ * Lets you: add/remove players, set starter/reserve, add goals (scorer + assistant), add cards.
+ * On save, calls the saveLineup server action (app/dashboard/partidas/actions.ts).
+ */
 'use client'
 
 import { useState, useCallback } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
+import { saveLineup } from '@/app/dashboard/partidas/actions'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 interface Player {
   id: string
@@ -21,14 +35,19 @@ interface ExistingEvent {
   id: string
   player_id: string
   event_type: string
+  assistant_id?: string | null
+}
+
+/** One goal: scorer + optional assistant (linked for stats like "who assisted whom"). */
+export interface GoalEntry {
+  scorerId: string
+  assistantId: string | null
 }
 
 interface PlayerLineup {
   playerId: string
   name: string
   starter: boolean
-  goals: number
-  assists: number
   yellowCards: number
   redCards: number
 }
@@ -36,6 +55,7 @@ interface PlayerLineup {
 interface MatchLineupProps {
   matchId: string
   players: Player[]
+  ownerId: string
   existingMatchPlayers: ExistingMatchPlayer[]
   existingEvents: ExistingEvent[]
   onClose: () => void
@@ -75,13 +95,13 @@ function Counter({ value, onChange, label, color = 'foreground', max = 20 }: { v
   )
 }
 
-export function MatchLineup({ matchId, players, existingMatchPlayers, existingEvents, onClose, onRefresh }: MatchLineupProps) {
+export function MatchLineup({ matchId, players, ownerId, existingMatchPlayers, existingEvents, onClose, onRefresh }: MatchLineupProps) {
   const router = useRouter()
   const [isSaving, setIsSaving] = useState(false)
   const [showPicker, setShowPicker] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
-  const buildInitial = useCallback((): PlayerLineup[] => {
+  const buildInitialLineup = useCallback((): PlayerLineup[] => {
     return existingMatchPlayers.map(mp => {
       const player = players.find(p => p.id === mp.player_id)
       const playerEvents = existingEvents.filter(e => e.player_id === mp.player_id)
@@ -89,15 +109,22 @@ export function MatchLineup({ matchId, players, existingMatchPlayers, existingEv
         playerId: mp.player_id,
         name: player?.name || 'Desconhecido',
         starter: mp.starter,
-        goals: playerEvents.filter(e => e.event_type === 'goal').length,
-        assists: playerEvents.filter(e => e.event_type === 'assist').length,
         yellowCards: playerEvents.filter(e => e.event_type === 'yellow_card').length,
         redCards: playerEvents.filter(e => e.event_type === 'red_card').length,
       }
     })
   }, [players, existingMatchPlayers, existingEvents])
 
-  const [lineup, setLineup] = useState<PlayerLineup[]>(buildInitial)
+  const buildInitialGoals = useCallback((): GoalEntry[] => {
+    const goalEvents = existingEvents.filter(e => e.event_type === 'goal')
+    return goalEvents.map(e => ({
+      scorerId: e.player_id,
+      assistantId: e.assistant_id ?? null,
+    }))
+  }, [existingEvents])
+
+  const [lineup, setLineup] = useState<PlayerLineup[]>(buildInitialLineup)
+  const [goalEntries, setGoalEntries] = useState<GoalEntry[]>(buildInitialGoals)
 
   const availablePlayers = players.filter(p => !lineup.some(l => l.playerId === p.id))
 
@@ -127,8 +154,6 @@ export function MatchLineup({ matchId, players, existingMatchPlayers, existingEv
           playerId: player.id,
           name: player.name,
           starter: true,
-          goals: 0,
-          assists: 0,
           yellowCards: 0,
           redCards: 0,
         })
@@ -141,53 +166,52 @@ export function MatchLineup({ matchId, players, existingMatchPlayers, existingEv
 
   const removePlayer = (playerId: string) => {
     setLineup(prev => prev.filter(l => l.playerId !== playerId))
+    setGoalEntries(prev => prev.filter(g => g.scorerId !== playerId && g.assistantId !== playerId))
   }
 
   const toggleStarter = (playerId: string) => {
     setLineup(prev => prev.map(l => l.playerId === playerId ? { ...l, starter: !l.starter } : l))
   }
 
-  const updateStat = (playerId: string, field: keyof PlayerLineup, value: number) => {
+  const updateStat = (playerId: string, field: 'yellowCards' | 'redCards', value: number) => {
     setLineup(prev => prev.map(l => l.playerId === playerId ? { ...l, [field]: value } : l))
+  }
+
+  const addGoal = () => {
+    const firstId = lineup[0]?.playerId
+    if (!firstId) return
+    setGoalEntries(prev => [...prev, { scorerId: firstId, assistantId: null }])
+  }
+
+  const removeGoal = (index: number) => {
+    setGoalEntries(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const updateGoal = (index: number, field: 'scorerId' | 'assistantId', value: string | null) => {
+    setGoalEntries(prev => prev.map((g, i) => i !== index ? g : { ...g, [field]: value }))
   }
 
   const handleSave = async () => {
     setIsSaving(true)
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    const userId = user!.id
-
-    await Promise.all([
-      supabase.from('match_players').delete().eq('match_id', matchId),
-      supabase.from('match_events').delete().eq('match_id', matchId),
-    ])
-
-    if (lineup.length > 0) {
-      const mpData = lineup.map(l => ({
-        match_id: matchId,
-        player_id: l.playerId,
-        starter: l.starter,
-        user_id: userId,
-      }))
-      await supabase.from('match_players').insert(mpData)
-    }
-
-    const events: { match_id: string; player_id: string; event_type: string; minute: null; user_id: string }[] = []
-    for (const l of lineup) {
-      for (let i = 0; i < l.goals; i++) events.push({ match_id: matchId, player_id: l.playerId, event_type: 'goal', minute: null, user_id: userId })
-      for (let i = 0; i < l.assists; i++) events.push({ match_id: matchId, player_id: l.playerId, event_type: 'assist', minute: null, user_id: userId })
-      for (let i = 0; i < l.yellowCards; i++) events.push({ match_id: matchId, player_id: l.playerId, event_type: 'yellow_card', minute: null, user_id: userId })
-      for (let i = 0; i < l.redCards; i++) events.push({ match_id: matchId, player_id: l.playerId, event_type: 'red_card', minute: null, user_id: userId })
-    }
-    if (events.length > 0) {
-      await supabase.from('match_events').insert(events)
-    }
-
-    toast.success('Escalacao salva')
+    const lineupPayload = lineup.map(l => ({
+      playerId: l.playerId,
+      starter: l.starter,
+      yellowCards: l.yellowCards,
+      redCards: l.redCards,
+    }))
+    const goalPayload = goalEntries.map(g => ({
+      scorerId: g.scorerId,
+      assistantId: g.assistantId,
+    }))
+    const result = await saveLineup(matchId, ownerId, lineupPayload, goalPayload)
     setIsSaving(false)
-    if (onRefresh) onRefresh()
-    else router.refresh()
+    if (result.error) {
+      toast.error(result.error)
+      return
+    }
+    toast.success(result.eventsCount ? `Escalação salva (${result.eventsCount} eventos)` : 'Escalação salva')
     onClose()
+    router.push('/dashboard/partidas')
   }
 
   return (
@@ -205,7 +229,7 @@ export function MatchLineup({ matchId, players, existingMatchPlayers, existingEv
             <circle cx="9" cy="7" r="4" />
             <path d="M19 8v6M22 11h-6" />
           </svg>
-          Adicionar jogadores ({availablePlayers.length} disponiveis)
+          Adicionar jogadores ({availablePlayers.length} disponíveis)
         </Button>
       )}
 
@@ -278,8 +302,78 @@ export function MatchLineup({ matchId, players, existingMatchPlayers, existingEv
         <p className="text-xs text-muted-foreground">{lineup.length} escalados</p>
       )}
 
-      {/* Player cards */}
-      <div className="flex flex-col gap-2 max-h-[55svh] overflow-y-auto -mx-1 px-1">
+      {/* Goals: scorer + optional assistant (linked for stats) */}
+      {lineup.length > 0 && (
+        <div className="rounded-xl border border-primary/20 bg-primary/5 p-3">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-semibold text-foreground">Gols da partida</span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 border-primary/40 text-primary"
+              onClick={addGoal}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-1.5">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              Adicionar gol
+            </Button>
+          </div>
+          {goalEntries.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-1">Nenhum gol registrado. Adicione quem fez o gol e, se houver, quem deu a assistência.</p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {goalEntries.map((g, idx) => (
+                  <li key={idx} className="flex items-center gap-2 flex-wrap">
+                    <Select value={g.scorerId} onValueChange={(v) => updateGoal(idx, 'scorerId', v)}>
+                      <SelectTrigger className="h-9 flex-1 min-w-[100px] text-xs border-border">
+                        <SelectValue placeholder="Autor do gol" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {lineup.map(p => (
+                          <SelectItem key={p.playerId} value={p.playerId} className="text-xs">
+                            {p.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <span className="text-muted-foreground text-xs shrink-0">assist.</span>
+                    <Select
+                      value={g.assistantId ?? 'none'}
+                      onValueChange={(v) => updateGoal(idx, 'assistantId', v === 'none' ? null : v)}
+                    >
+                      <SelectTrigger className="h-9 flex-1 min-w-[90px] text-xs border-border">
+                        <SelectValue placeholder="—" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none" className="text-xs text-muted-foreground">
+                          —
+                        </SelectItem>
+                        {lineup.map(p => (
+                          <SelectItem key={p.playerId} value={p.playerId} className="text-xs" disabled={p.playerId === g.scorerId}>
+                            {p.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <button
+                      type="button"
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-destructive transition-colors"
+                      onClick={() => removeGoal(idx)}
+                      aria-label="Remover gol"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
+                    </button>
+                  </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {/* Player cards (starter + cards only) */}
+      <div className="flex flex-col gap-2 max-h-[45svh] overflow-y-auto -mx-1 px-1">
         {lineup.length === 0 && !showPicker && (
           <div className="flex flex-col items-center justify-center py-8">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" className="mb-2 text-muted-foreground/40">
@@ -317,10 +411,8 @@ export function MatchLineup({ matchId, players, existingMatchPlayers, existingEv
               </button>
             </div>
             <div className="flex flex-col gap-2">
-              <Counter label="Gols" value={l.goals} onChange={(v) => updateStat(l.playerId, 'goals', v)} color="primary" />
-              <Counter label="Assistencias" value={l.assists} onChange={(v) => updateStat(l.playerId, 'assists', v)} color="primary" />
-              <Counter label="Cartao amarelo" value={l.yellowCards} onChange={(v) => updateStat(l.playerId, 'yellowCards', v)} color="warning" max={2} />
-              <Counter label="Cartao vermelho" value={l.redCards} onChange={(v) => updateStat(l.playerId, 'redCards', v)} color="destructive" max={1} />
+              <Counter label="Cartão amarelo" value={l.yellowCards} onChange={(v) => updateStat(l.playerId, 'yellowCards', v)} color="warning" max={2} />
+              <Counter label="Cartão vermelho" value={l.redCards} onChange={(v) => updateStat(l.playerId, 'redCards', v)} color="destructive" max={1} />
             </div>
           </div>
         ))}
@@ -337,7 +429,7 @@ export function MatchLineup({ matchId, players, existingMatchPlayers, existingEv
           onClick={handleSave}
           disabled={isSaving}
         >
-          {isSaving ? 'Salvando...' : 'Salvar escalacao'}
+          {isSaving ? 'Salvando...' : 'Salvar escalação'}
         </Button>
       </div>
     </div>

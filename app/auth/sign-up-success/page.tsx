@@ -12,7 +12,7 @@ export default function SignUpSuccessPage() {
         </div>
         <h1 className="text-2xl font-semibold text-foreground">Conta criada!</h1>
         <p className="mt-2 text-muted-foreground">
-          Verifique seu email para confirmar sua conta e comecar a usar o Meu Time.
+          Verifique seu e-mail para confirmar sua conta e começar a usar o Meu Time.
         </p>
         <Button asChild className="mt-6 h-11 w-full bg-primary text-primary-foreground hover:bg-primary/90">
           <Link href="/auth/login">Ir para login</Link>

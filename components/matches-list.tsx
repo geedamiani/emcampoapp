@@ -1,3 +1,10 @@
+/**
+ * MATCHES LIST COMPONENT
+ *
+ * Renders the list of matches on the Partidas page.
+ * Each match card shows: opponent, score, date, lineup count, goals with assists, cards.
+ * Expandable cards. Buttons: new match, edit match, lineup, delete.
+ */
 'use client'
 
 import { useState, useEffect, useTransition } from 'react'
@@ -33,19 +40,21 @@ interface Player {
 
 interface MatchPlayer {
   player_id: string
-  starter: boolean
+  was_starter?: boolean
+  starter?: boolean
 }
 
 interface MatchEvent {
   id: string
   event_type: string
   player_id: string
+  assistant_id?: string | null
   players: { name: string } | null
 }
 
 interface Match {
   id: string
-  opponent_id: string
+  opponent_id?: string
   match_date: string
   goals_for: number
   goals_against: number
@@ -75,6 +84,45 @@ function groupEventsByPlayer(events: MatchEvent[], type: string) {
   return Object.values(map)
 }
 
+function getAssistEntries(events: MatchEvent[], players: Player[]): { name: string; count: number }[] {
+  const nameById = Object.fromEntries(players.map(p => [p.id, p.name]))
+  const map: Record<string, { name: string; count: number }> = {}
+  for (const e of events) {
+    if (e.event_type === 'goal' && e.assistant_id) {
+      const name = nameById[e.assistant_id] || 'Desconhecido'
+      if (!map[e.assistant_id]) map[e.assistant_id] = { name, count: 0 }
+      map[e.assistant_id].count++
+    } else if (e.event_type === 'assist') {
+      const name = e.players?.name || nameById[e.player_id] || 'Desconhecido'
+      if (!map[e.player_id]) map[e.player_id] = { name, count: 0 }
+      map[e.player_id].count++
+    }
+  }
+  return Object.values(map)
+}
+
+function GoalsLine({ events, players }: { events: MatchEvent[]; players: Player[] }) {
+  const goals = events.filter(e => e.event_type === 'goal')
+  if (goals.length === 0) return null
+  const nameById = Object.fromEntries(players.map(p => [p.id, p.name]))
+  return (
+    <div className="flex items-start gap-2 text-xs">
+      <span className="shrink-0 font-semibold mt-px text-primary">Gols:</span>
+      <span className="text-foreground">
+        {goals.map((g, i) => (
+          <span key={g.id}>
+            {i > 0 && ', '}
+            <span className="font-medium">{g.players?.name || nameById[g.player_id] || 'Desconhecido'}</span>
+            {g.assistant_id && (
+              <span className="text-muted-foreground"> (assist. {nameById[g.assistant_id] || '?'})</span>
+            )}
+          </span>
+        ))}
+      </span>
+    </div>
+  )
+}
+
 function EventLine({ label, entries, color }: { label: string; entries: { name: string; count: number }[]; color: string }) {
   if (entries.length === 0) return null
   return (
@@ -97,11 +145,13 @@ export function MatchesList({
   matches,
   opponents,
   players,
+  ownerId,
   autoOpen = false,
 }: {
   matches: Match[]
   opponents: OpponentTeam[]
   players: Player[]
+  ownerId: string
   autoOpen?: boolean
 }) {
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -134,7 +184,7 @@ export function MatchesList({
     if (error) {
       toast.error('Erro ao excluir partida')
     } else {
-      toast.success('Partida excluida')
+      toast.success('Partida excluída')
       refreshData()
     }
     setDeleteId(null)
@@ -172,8 +222,7 @@ export function MatchesList({
             const isExpanded = expandedId === match.id
             const playerCount = match.match_players?.length || 0
 
-            const goals = groupEventsByPlayer(match.match_events, 'goal')
-            const assists = groupEventsByPlayer(match.match_events, 'assist')
+            const assistEntries = getAssistEntries(match.match_events, players)
             const yellows = groupEventsByPlayer(match.match_events, 'yellow_card')
             const reds = groupEventsByPlayer(match.match_events, 'red_card')
 
@@ -213,11 +262,11 @@ export function MatchesList({
                   <div className="border-t border-border px-3 pb-3 pt-2">
                     {playerCount > 0 ? (
                       <div className="mb-3 flex flex-col gap-1.5">
-                        <EventLine label="Gols" entries={goals} color="text-primary" />
-                        <EventLine label="Assist." entries={assists} color="text-primary" />
+                        <GoalsLine events={match.match_events} players={players} />
+                        <EventLine label="Assist." entries={assistEntries} color="text-primary" />
                         <EventLine label="Amarelo" entries={yellows} color="text-warning" />
                         <EventLine label="Vermelho" entries={reds} color="text-destructive" />
-                        {goals.length === 0 && assists.length === 0 && yellows.length === 0 && reds.length === 0 && (
+                        {match.match_events.filter(e => e.event_type === 'goal').length === 0 && assistEntries.length === 0 && yellows.length === 0 && reds.length === 0 && (
                           <p className="text-xs text-muted-foreground">Nenhum evento registrado.</p>
                         )}
                       </div>
@@ -232,7 +281,7 @@ export function MatchesList({
                         className="flex-1 h-8 text-xs border-border text-muted-foreground bg-transparent"
                         onClick={(e) => { e.stopPropagation(); setLineupMatch(match); setLineupSheetOpen(true) }}
                       >
-                        {playerCount > 0 ? 'Editar escalacao' : 'Escalar jogadores'}
+                        {playerCount > 0 ? 'Editar escalação' : 'Escalar jogadores'}
                       </Button>
                       <Button
                         size="sm"
@@ -274,6 +323,7 @@ export function MatchesList({
           <MatchForm
             opponents={currentOpponents}
             match={editingMatch}
+            ownerId={ownerId}
             onClose={() => setSheetOpen(false)}
             onOpponentsChange={setCurrentOpponents}
             onRefresh={refreshData}
@@ -286,14 +336,18 @@ export function MatchesList({
         <SheetContent side="bottom" className="bg-background border-border rounded-t-2xl max-h-[90svh] overflow-y-auto">
           <SheetHeader className="mb-4">
             <SheetTitle className="text-foreground">
-              Escalacao{lineupMatch?.opponent_teams?.name ? ` - vs ${lineupMatch.opponent_teams.name}` : ''}
+              Escalação{lineupMatch?.opponent_teams?.name ? ` - vs ${lineupMatch.opponent_teams.name}` : ''}
             </SheetTitle>
           </SheetHeader>
           {lineupMatch && (
             <MatchLineup
               matchId={lineupMatch.id}
               players={players}
-              existingMatchPlayers={lineupMatch.match_players || []}
+              ownerId={ownerId}
+              existingMatchPlayers={(lineupMatch.match_players || []).map(mp => ({
+                player_id: mp.player_id,
+                starter: mp.was_starter ?? mp.starter ?? false,
+              }))}
               existingEvents={lineupMatch.match_events || []}
               onClose={() => setLineupSheetOpen(false)}
               onRefresh={refreshData}
@@ -308,7 +362,7 @@ export function MatchesList({
           <AlertDialogHeader>
             <AlertDialogTitle className="text-foreground">Excluir partida?</AlertDialogTitle>
             <AlertDialogDescription>
-              Essa acao nao pode ser desfeita. Todos os jogadores escalados e eventos desta partida tambem serao excluidos.
+              Essa ação não pode ser desfeita. Todos os jogadores escalados e eventos desta partida também serão excluídos.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

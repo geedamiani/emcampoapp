@@ -33,7 +33,7 @@ interface OpponentTeam {
   matches: MatchSummary[]
 }
 
-export function OpponentsList({ opponents }: { opponents: OpponentTeam[] }) {
+export function OpponentsList({ opponents, ownerId }: { opponents: OpponentTeam[]; ownerId: string }) {
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editingOpponent, setEditingOpponent] = useState<OpponentTeam | null>(null)
   const [name, setName] = useState('')
@@ -65,7 +65,6 @@ export function OpponentsList({ opponents }: { opponents: OpponentTeam[] }) {
     setIsLoading(true)
 
     const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
 
     if (editingOpponent) {
       const { error } = await supabase.from('opponent_teams').update({ name }).eq('id', editingOpponent.id)
@@ -75,7 +74,7 @@ export function OpponentsList({ opponents }: { opponents: OpponentTeam[] }) {
         toast.success('Time atualizado')
       }
     } else {
-      const { error } = await supabase.from('opponent_teams').insert({ name, user_id: user!.id })
+      const { error } = await supabase.from('opponent_teams').insert({ name, user_id: ownerId })
       if (error) {
         toast.error('Erro ao cadastrar time')
       } else {
@@ -93,9 +92,9 @@ export function OpponentsList({ opponents }: { opponents: OpponentTeam[] }) {
     const supabase = createClient()
     const { error } = await supabase.from('opponent_teams').delete().eq('id', deleteId)
     if (error) {
-      toast.error('Erro ao excluir time. Verifique se nao ha partidas vinculadas.')
+      toast.error('Erro ao excluir time. Verifique se não há partidas vinculadas.')
     } else {
-      toast.success('Time excluido')
+      toast.success('Time excluído')
       refreshData()
     }
     setDeleteId(null)
@@ -113,7 +112,7 @@ export function OpponentsList({ opponents }: { opponents: OpponentTeam[] }) {
       {isPending && <LoadingOverlay />}
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold text-foreground">Adversarios</h1>
+          <h1 className="text-lg font-semibold text-foreground">Adversários</h1>
           <p className="text-sm text-muted-foreground">{opponents.length} {opponents.length === 1 ? 'time cadastrado' : 'times cadastrados'}</p>
         </div>
         <Button onClick={handleAdd} size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90">
@@ -130,9 +129,9 @@ export function OpponentsList({ opponents }: { opponents: OpponentTeam[] }) {
             <path d="M6 9H4.5a2.5 2.5 0 010-5H6M18 9h1.5a2.5 2.5 0 000-5H18" stroke="currentColor" strokeWidth="1.5" />
             <rect x="6" y="4" width="12" height="10" rx="2" stroke="currentColor" strokeWidth="1.5" />
           </svg>
-          <p className="text-sm text-muted-foreground">Nenhum adversario cadastrado</p>
+          <p className="text-sm text-muted-foreground">Nenhum adversário cadastrado</p>
           <Button onClick={handleAdd} variant="ghost" size="sm" className="mt-2 text-primary hover:text-primary">
-            Cadastrar primeiro adversario
+            Cadastrar primeiro adversário
           </Button>
         </div>
       ) : (
@@ -187,7 +186,7 @@ export function OpponentsList({ opponents }: { opponents: OpponentTeam[] }) {
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetContent side="bottom" className="bg-background border-border rounded-t-2xl">
           <SheetHeader className="mb-4">
-            <SheetTitle className="text-foreground">{editingOpponent ? 'Editar adversario' : 'Novo adversario'}</SheetTitle>
+            <SheetTitle className="text-foreground">{editingOpponent ? 'Editar adversário' : 'Novo adversário'}</SheetTitle>
           </SheetHeader>
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <div className="grid gap-2">
@@ -216,9 +215,9 @@ export function OpponentsList({ opponents }: { opponents: OpponentTeam[] }) {
       <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
         <AlertDialogContent className="bg-card border-border max-w-sm">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-foreground">Excluir adversario?</AlertDialogTitle>
+            <AlertDialogTitle className="text-foreground">Excluir adversário?</AlertDialogTitle>
             <AlertDialogDescription>
-              Essa acao nao pode ser desfeita. Todas as partidas contra esse time tambem serao excluidas.
+              Essa ação não pode ser desfeita. Todas as partidas contra esse time também serão excluídas.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

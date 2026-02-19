@@ -23,7 +23,7 @@ export function RecentMatches({ matches }: { matches: MatchResult[] }) {
   if (matches.length === 0) {
     return (
       <div className="rounded-xl border border-border bg-card p-4">
-        <h3 className="mb-3 text-sm font-semibold text-foreground">Ultimas partidas</h3>
+        <h3 className="mb-3 text-sm font-semibold text-foreground">Últimas partidas</h3>
         <p className="text-sm text-muted-foreground">Nenhuma partida registrada</p>
       </div>
     )
@@ -31,7 +31,7 @@ export function RecentMatches({ matches }: { matches: MatchResult[] }) {
 
   return (
     <div className="rounded-xl border border-border bg-card p-4">
-      <h3 className="mb-3 text-sm font-semibold text-foreground">Ultimas partidas</h3>
+      <h3 className="mb-3 text-sm font-semibold text-foreground">Últimas partidas</h3>
       <div className="flex flex-col gap-2.5">
         {matches.slice(0, 5).map((match) => {
           const result = getResult(match.goals_for, match.goals_against)

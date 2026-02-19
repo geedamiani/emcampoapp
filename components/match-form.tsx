@@ -24,12 +24,13 @@ interface MatchFormProps {
     goals_for: number
     goals_against: number
   }
+  ownerId: string
   onClose: () => void
   onOpponentsChange?: (opponents: OpponentTeam[]) => void
   onRefresh?: () => void
 }
 
-export function MatchForm({ opponents: initialOpponents, match, onClose, onOpponentsChange, onRefresh }: MatchFormProps) {
+export function MatchForm({ opponents: initialOpponents, match, ownerId, onClose, onOpponentsChange, onRefresh }: MatchFormProps) {
   const [opponents, setOpponents] = useState(initialOpponents)
   const [opponentId, setOpponentId] = useState(match?.opponent_id || '')
   const [matchDate, setMatchDate] = useState(match?.match_date || '')
@@ -47,16 +48,15 @@ export function MatchForm({ opponents: initialOpponents, match, onClose, onOppon
     setIsCreatingOpponent(true)
 
     const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
 
     const { data, error } = await supabase
       .from('opponent_teams')
-      .insert({ name: newOpponentName.trim(), user_id: user!.id })
+      .insert({ name: newOpponentName.trim(), user_id: ownerId })
       .select()
       .single()
 
     if (error || !data) {
-      toast.error('Erro ao criar adversario')
+      toast.error('Erro ao criar adversário')
     } else {
       const updated = [...opponents, data].sort((a, b) => a.name.localeCompare(b.name))
       setOpponents(updated)
@@ -64,7 +64,7 @@ export function MatchForm({ opponents: initialOpponents, match, onClose, onOppon
       setShowNewOpponent(false)
       setNewOpponentName('')
       onOpponentsChange?.(updated)
-      toast.success('Adversario adicionado')
+      toast.success('Adversário adicionado')
     }
     setIsCreatingOpponent(false)
   }
@@ -81,36 +81,40 @@ export function MatchForm({ opponents: initialOpponents, match, onClose, onOppon
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!opponentId || !matchDate.trim()) {
+      toast.error('Selecione o adversário e a data')
+      return
+    }
     setIsLoading(true)
 
     const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
 
     const payload = {
       opponent_id: opponentId,
-      match_date: matchDate,
-      goals_for: Number.parseInt(goalsFor) || 0,
-      goals_against: Number.parseInt(goalsAgainst) || 0,
-      user_id: user!.id,
+      match_date: matchDate.trim(),
+      goals_for: Number.parseInt(goalsFor, 10) || 0,
+      goals_against: Number.parseInt(goalsAgainst, 10) || 0,
+      user_id: ownerId,
     }
 
     if (isEditing) {
       const { error } = await supabase.from('matches').update(payload).eq('id', match.id)
+      setIsLoading(false)
       if (error) {
-        toast.error('Erro ao atualizar partida')
-      } else {
-        toast.success('Partida atualizada')
+        toast.error(error.message || 'Erro ao atualizar partida')
+        return
       }
+      toast.success('Partida atualizada')
     } else {
       const { error } = await supabase.from('matches').insert(payload)
+      setIsLoading(false)
       if (error) {
-        toast.error('Erro ao registrar partida')
-      } else {
-        toast.success('Partida registrada')
+        toast.error(error.message || 'Erro ao registrar partida')
+        return
       }
+      toast.success('Partida registrada')
     }
 
-    setIsLoading(false)
     if (onRefresh) onRefresh()
     else router.refresh()
     onClose()
@@ -119,18 +123,18 @@ export function MatchForm({ opponents: initialOpponents, match, onClose, onOppon
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <div className="grid gap-2">
-        <Label className="text-muted-foreground">Adversario</Label>
+        <Label className="text-muted-foreground">Adversário</Label>
         {!showNewOpponent ? (
           <Select value={opponentId} onValueChange={handleOpponentChange} required>
             <SelectTrigger className="h-11 bg-secondary border-border">
-              <SelectValue placeholder="Selecione o adversario" />
+              <SelectValue placeholder="Selecione o adversário" />
             </SelectTrigger>
             <SelectContent className="bg-card border-border">
               {opponents.map(o => (
                 <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
               ))}
               <SelectItem value="__new__" className="text-primary font-medium">
-                + Novo adversario
+                + Novo adversário
               </SelectItem>
             </SelectContent>
           </Select>
@@ -139,7 +143,7 @@ export function MatchForm({ opponents: initialOpponents, match, onClose, onOppon
             <Input
               value={newOpponentName}
               onChange={(e) => setNewOpponentName(e.target.value)}
-              placeholder="Nome do adversario"
+              placeholder="Nome do adversário"
               className="h-11 bg-secondary border-border flex-1"
               autoFocus
             />

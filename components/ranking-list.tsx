@@ -13,12 +13,6 @@ interface RankingListProps {
   valueLabel?: string
 }
 
-const dotColors = {
-  primary: 'bg-primary',
-  warning: 'bg-warning',
-  destructive: 'bg-destructive',
-}
-
 export function RankingList({ title, items, emptyMessage = 'Nenhum dado', accent = 'primary', valueLabel }: RankingListProps) {
   return (
     <div className="rounded-xl border border-border bg-card p-4">
@@ -32,7 +26,6 @@ export function RankingList({ title, items, emptyMessage = 'Nenhum dado', accent
               <span className="w-5 text-center text-xs font-bold text-muted-foreground">
                 {i + 1}
               </span>
-              <div className={cn('h-2 w-2 rounded-full', dotColors[accent])} />
               <div className="flex-1 min-w-0">
                 <p className="truncate text-sm font-medium text-foreground">
                   {item.name}

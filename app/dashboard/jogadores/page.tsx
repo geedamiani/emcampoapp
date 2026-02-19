@@ -1,5 +1,12 @@
+/**
+ * JOGADORES PAGE
+ *
+ * Shows all players with their stats (matches played, goals, assists, cards).
+ * Assists count both legacy "assist" events AND goals where assistant_id = player.
+ */
 import { createClient } from '@/lib/supabase/server'
 import { PlayersList } from '@/components/players-list'
+import { getEffectiveOwnerId } from '@/lib/get-effective-owner'
 
 export default async function PlayersPage({ searchParams }: { searchParams: Promise<{ action?: string }> }) {
   const params = await searchParams
@@ -9,7 +16,7 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
     const { redirect } = await import('next/navigation')
     redirect('/auth/login')
   }
-  const userId = user.id
+  const ownerId = await getEffectiveOwnerId(supabase, user.id)
 
   const [
     { data: players },
@@ -17,10 +24,10 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
     { data: events },
     { data: matches },
   ] = await Promise.all([
-    supabase.from('players').select('*').eq('user_id', userId).order('name'),
-    supabase.from('match_players').select('player_id, starter, match_id').eq('user_id', userId),
-    supabase.from('match_events').select('player_id, event_type').eq('user_id', userId),
-    supabase.from('matches').select('id, match_date').eq('user_id', userId).order('match_date', { ascending: false }),
+    supabase.from('players').select('*').eq('user_id', ownerId).order('name'),
+    supabase.from('match_players').select('*').eq('user_id', ownerId),
+    supabase.from('match_events').select('player_id, event_type, assistant_id').eq('user_id', ownerId),
+    supabase.from('matches').select('id, match_date').eq('user_id', ownerId).order('match_date', { ascending: false }),
   ])
 
   const totalMatches = matches?.length || 0
@@ -44,10 +51,12 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
       position: p.position,
       whatsapp: p.whatsapp,
       matches_played: playerMatches.length,
-      matches_starter: playerMatches.filter(mp => mp.starter).length,
+      matches_starter: playerMatches.filter(mp => (mp as { was_starter?: boolean; starter?: boolean }).was_starter ?? (mp as { was_starter?: boolean; starter?: boolean }).starter).length,
       total_matches: totalMatches,
       goals: playerEvents.filter(ev => ev.event_type === 'goal').length,
-      assists: playerEvents.filter(ev => ev.event_type === 'assist').length,
+      assists:
+        (events || []).filter(ev => ev.event_type === 'goal' && ev.assistant_id === p.id).length +
+        playerEvents.filter(ev => ev.event_type === 'assist').length,
       yellow_cards: playerEvents.filter(ev => ev.event_type === 'yellow_card').length,
       red_cards: playerEvents.filter(ev => ev.event_type === 'red_card').length,
       inNegotiation: hasEnough && !last5PlayerIds.has(p.id),
@@ -56,7 +65,7 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
 
   return (
     <div className="mx-auto max-w-lg px-4 py-5">
-      <PlayersList players={playersWithStats} autoOpen={params.action === 'new'} />
+      <PlayersList players={playersWithStats} ownerId={ownerId} autoOpen={params.action === 'new'} />
     </div>
   )
 }

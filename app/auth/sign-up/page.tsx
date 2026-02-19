@@ -1,17 +1,25 @@
 'use client'
 
-import React from "react"
+import React, { Suspense } from "react"
 
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useState } from 'react'
+import { acceptInviteAction } from '@/app/auth/aceitar-convite/actions'
 
-export default function SignUpPage() {
-  const [email, setEmail] = useState('')
+function SignUpForm() {
+  const searchParams = useSearchParams()
+  const emailFromUrl = searchParams.get('email') || ''
+  const redirectTo = searchParams.get('redirect') || '/dashboard'
+  const teamNameFromUrl = searchParams.get('teamName') || ''
+  const tokenFromUrl = searchParams.get('token') || ''
+  const isInviteFlow = !!teamNameFromUrl
+
+  const [email, setEmail] = useState(emailFromUrl)
   const [password, setPassword] = useState('')
   const [repeatPassword, setRepeatPassword] = useState('')
   const [teamName, setTeamName] = useState('')
@@ -26,28 +34,53 @@ export default function SignUpPage() {
     setError(null)
 
     if (password !== repeatPassword) {
-      setError('As senhas nao coincidem')
+      setError('As senhas não coincidem')
       setIsLoading(false)
       return
     }
 
     try {
-      const { error } = await supabase.auth.signUp({
-        email,
+      const { data, error } = await supabase.auth.signUp({
+        email: isInviteFlow ? emailFromUrl : email,
         password,
         options: {
           emailRedirectTo:
             process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL ||
             `${window.location.origin}/dashboard`,
           data: {
-            team_name: teamName,
+            team_name: isInviteFlow ? (teamNameFromUrl || 'Meu Time') : teamName,
           },
         },
       })
-      if (error) throw error
-      router.push('/auth/sign-up-success')
+      
+      if (error) {
+        // Check for rate limit error
+        if (error.message?.toLowerCase().includes('rate limit') || error.message?.toLowerCase().includes('email rate limit')) {
+          setError('Limite de e-mails excedido. Aguarde alguns minutos e tente novamente.')
+        } else {
+          throw error
+        }
+      } else if (data?.user) {
+        if (isInviteFlow && tokenFromUrl) {
+          const result = await acceptInviteAction(tokenFromUrl)
+          if (result.success) {
+            router.push(`/dashboard?welcome=1&teamName=${encodeURIComponent(result.teamName || teamNameFromUrl || 'Meu Time')}`)
+            return
+          }
+          setError(result.error || 'Erro ao aceitar convite.')
+          return
+        }
+        router.push(redirectTo)
+      } else {
+        setError('Erro ao criar conta. Tente novamente.')
+      }
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : 'Ocorreu um erro')
+      const errorMessage = error instanceof Error ? error.message : 'Ocorreu um erro'
+      if (errorMessage.toLowerCase().includes('rate limit')) {
+        setError('Limite de e-mails excedido. Aguarde alguns minutos e tente novamente.')
+      } else {
+        setError(errorMessage)
+      }
     } finally {
       setIsLoading(false)
     }
@@ -66,18 +99,22 @@ export default function SignUpPage() {
             </svg>
           </div>
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">Criar conta</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Registre seu time e comece a acompanhar</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {isInviteFlow ? 'Você está se juntando ao time como administrador' : 'Registre seu time e comece a acompanhar'}
+          </p>
         </div>
         <form onSubmit={handleSignUp} className="flex flex-col gap-4">
           <div className="grid gap-2">
-            <Label htmlFor="teamName" className="text-muted-foreground">Nome do time</Label>
+            <Label htmlFor="teamName" className="text-muted-foreground">Time</Label>
             <Input
               id="teamName"
               type="text"
               placeholder="FC Pelada"
-              required
-              value={teamName}
-              onChange={(e) => setTeamName(e.target.value)}
+              required={!isInviteFlow}
+              value={isInviteFlow ? (teamNameFromUrl || 'Meu Time') : teamName}
+              onChange={(e) => !isInviteFlow && setTeamName(e.target.value)}
+              readOnly={isInviteFlow}
+              disabled={isInviteFlow}
               className="h-11 bg-secondary border-border"
             />
           </div>
@@ -88,8 +125,10 @@ export default function SignUpPage() {
               type="email"
               placeholder="seu@email.com"
               required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={isInviteFlow ? emailFromUrl : email}
+              onChange={(e) => !isInviteFlow && setEmail(e.target.value)}
+              readOnly={isInviteFlow}
+              disabled={isInviteFlow}
               className="h-11 bg-secondary border-border"
             />
           </div>
@@ -119,14 +158,28 @@ export default function SignUpPage() {
           <Button type="submit" className="h-11 w-full bg-primary text-primary-foreground hover:bg-primary/90" disabled={isLoading}>
             {isLoading ? 'Criando...' : 'Criar conta'}
           </Button>
-          <p className="text-center text-sm text-muted-foreground">
-            {'Ja tem conta? '}
-            <Link href="/auth/login" className="text-primary underline-offset-4 hover:underline">
-              Entrar
-            </Link>
-          </p>
+          {!isInviteFlow && (
+            <p className="text-center text-sm text-muted-foreground">
+              {'Já tem conta? '}
+              <Link href="/auth/login" className="text-primary underline-offset-4 hover:underline">
+                Entrar
+              </Link>
+            </p>
+          )}
         </form>
       </div>
     </div>
+  )
+}
+
+export default function SignUpPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-svh w-full items-center justify-center p-6">
+        <div className="mx-auto h-12 w-12 animate-spin rounded-full border-2 border-muted-foreground border-t-primary" />
+      </div>
+    }>
+      <SignUpForm />
+    </Suspense>
   )
 }

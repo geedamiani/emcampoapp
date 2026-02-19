@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils'
 
 const navItems = [
   {
-    label: 'Inicio',
+    label: 'Início',
     href: '/dashboard',
     icon: (active: boolean) => (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className={cn(active ? 'text-primary' : 'text-muted-foreground')}>
@@ -37,7 +37,7 @@ const navItems = [
     ),
   },
   {
-    label: 'Adversarios',
+    label: 'Adversários',
     href: '/dashboard/adversarios',
     icon: (active: boolean) => (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" className={cn(active ? 'text-primary' : 'text-muted-foreground')}>
