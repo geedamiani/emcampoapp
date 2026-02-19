@@ -7,7 +7,6 @@
 import React, { Suspense } from "react"
 import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
 import { BottomNav } from '@/components/bottom-nav'
 import { DashboardHeader } from '@/components/dashboard-header'
 import { WelcomeToast } from '@/components/welcome-toast'
@@ -27,16 +26,25 @@ export default async function DashboardLayout({
   let shareLink: string | null = null
 
   if (ownerId) {
-    const admin = createAdminClient()
-    const { data: ownerUser } = await admin.auth.admin.getUserById(ownerId)
-    teamName = (ownerUser?.user?.user_metadata?.team_name as string) || null
+    // Try to fetch the owner's team name via admin client (needs SUPABASE_SERVICE_ROLE_KEY)
+    try {
+      const { createAdminClient } = await import('@/lib/supabase/admin')
+      const admin = createAdminClient()
+      const { data: ownerUser } = await admin.auth.admin.getUserById(ownerId)
+      teamName = (ownerUser?.user?.user_metadata?.team_name as string) || null
+    } catch {
+      // SUPABASE_SERVICE_ROLE_KEY not set — fall back to current user's metadata
+      teamName = (user?.user_metadata?.team_name as string) || null
+    }
 
     const token = await getOrCreateShareToken(ownerId)
-    const headersList = await headers()
-    const host = headersList.get('host') || ''
-    const isLocalhost = host.startsWith('localhost') || host.startsWith('127.0.0.1')
-    const origin = process.env.NEXT_PUBLIC_APP_URL || (host ? `${isLocalhost ? 'http' : 'https'}://${host}` : '')
-    shareLink = token && origin ? `${origin}/t/${token}` : null
+    if (token) {
+      const headersList = await headers()
+      const host = headersList.get('host') || ''
+      const isLocalhost = host.startsWith('localhost') || host.startsWith('127.0.0.1')
+      const origin = process.env.NEXT_PUBLIC_APP_URL || (host ? `${isLocalhost ? 'http' : 'https'}://${host}` : '')
+      shareLink = origin ? `${origin}/t/${token}` : null
+    }
   }
 
   return (

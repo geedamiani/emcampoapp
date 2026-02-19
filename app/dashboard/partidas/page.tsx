@@ -5,15 +5,11 @@
  * Loads: matches, opponents, players, match events, and match players.
  * Passes everything to the MatchesList client component.
  *
- * NOTE: match_events uses admin client because the server action writes
- * with the server supabase client and RLS can be inconsistent on reads.
- *
  * NOTE: The join `players!match_events_player_id_fkey(name)` is needed
  * because match_events has TWO foreign keys to players (player_id and
  * assistant_id), so PostgREST needs to know which FK to use for the join.
  */
 import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
 import { MatchesList } from '@/components/matches-list'
 import { getEffectiveOwnerId } from '@/lib/get-effective-owner'
 
@@ -28,7 +24,15 @@ export default async function MatchesPage({ searchParams }: { searchParams: Prom
     redirect('/auth/login')
   }
   const ownerId = await getEffectiveOwnerId(supabase, user.id)
-  const admin = createAdminClient()
+
+  // Try admin client for match_events (bypasses RLS), fall back to regular client
+  let eventsClient = supabase
+  try {
+    const { createAdminClient } = await import('@/lib/supabase/admin')
+    eventsClient = createAdminClient()
+  } catch {
+    // SUPABASE_SERVICE_ROLE_KEY not set — use regular client
+  }
 
   const [
     { data: matchesData },
@@ -52,7 +56,7 @@ export default async function MatchesPage({ searchParams }: { searchParams: Prom
       .select('id, name')
       .eq('user_id', ownerId)
       .order('name'),
-    admin
+    eventsClient
       .from('match_events')
       .select('id, event_type, player_id, match_id, assistant_id, players!match_events_player_id_fkey(name)')
       .eq('user_id', ownerId),
