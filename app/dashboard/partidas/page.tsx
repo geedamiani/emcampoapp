@@ -1,9 +1,7 @@
 /**
  * PARTIDAS PAGE
  *
- * Shows all matches for the current account.
- * Loads: matches, opponents, players, match events, and match players.
- * Passes everything to the MatchesList client component.
+ * Shows all matches for the current account, filtered by semester.
  *
  * NOTE: The join `players!match_events_player_id_fkey(name)` is needed
  * because match_events has TWO foreign keys to players (player_id and
@@ -12,10 +10,11 @@
 import { createClient } from '@/lib/supabase/server'
 import { MatchesList } from '@/components/matches-list'
 import { getEffectiveOwnerId } from '@/lib/get-effective-owner'
+import { resolveSemester, isDateInSemester } from '@/lib/semester'
 
 export const dynamic = 'force-dynamic'
 
-export default async function MatchesPage({ searchParams }: { searchParams: Promise<{ action?: string }> }) {
+export default async function MatchesPage({ searchParams }: { searchParams: Promise<{ action?: string; semester?: string }> }) {
   const params = await searchParams
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -66,7 +65,10 @@ export default async function MatchesPage({ searchParams }: { searchParams: Prom
       .eq('user_id', ownerId),
   ])
 
-  const matches = matchesData || []
+  const allMatches = matchesData || []
+  const matchDates = allMatches.map(m => m.match_date).filter(Boolean)
+  const semester = resolveSemester(params.semester ?? null, matchDates)
+  const matches = allMatches.filter(m => isDateInSemester(m.match_date, semester))
 
   const eventsByMatch = new Map<string, typeof matchEvents>()
   for (const e of matchEvents || []) {

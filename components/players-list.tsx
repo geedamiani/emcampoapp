@@ -1,6 +1,15 @@
+/**
+ * PLAYERS LIST COMPONENT
+ *
+ * Renders the list of players on the Jogadores page.
+ * Each player card shows: name, position, and stats (Partidas, Gols, Assist.) in a horizontal row.
+ * Includes a search bar to filter players by name.
+ *
+ * Hidden for now (still collected): Presença, Titular, Cartões Amarelos, Cartões Vermelhos.
+ */
 'use client'
 
-import { useState, useEffect, useTransition } from 'react'
+import { useState, useEffect, useTransition, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
@@ -35,12 +44,19 @@ interface PlayerStats {
   inNegotiation: boolean
 }
 
-export function PlayersList({ players, ownerId, autoOpen = false }: { players: PlayerStats[]; ownerId: string; autoOpen?: boolean }) {
+export function PlayersList({ players, ownerId, autoOpen = false, readOnly = false }: { players: PlayerStats[]; ownerId: string; autoOpen?: boolean; readOnly?: boolean }) {
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editingPlayer, setEditingPlayer] = useState<PlayerStats | undefined>(undefined)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [search, setSearch] = useState('')
   const router = useRouter()
+
+  const filteredPlayers = useMemo(() => {
+    if (!search.trim()) return players
+    const q = search.trim().toLowerCase()
+    return players.filter(p => p.name.toLowerCase().includes(q))
+  }, [players, search])
 
   const refreshData = () => {
     startTransition(() => {
@@ -68,11 +84,6 @@ export function PlayersList({ players, ownerId, autoOpen = false }: { players: P
     setDeleteId(null)
   }
 
-  const pct = (part: number, total: number) => {
-    if (total === 0) return '0%'
-    return `${Math.round((part / total) * 100)}%`
-  }
-
   return (
     <>
       {isPending && <LoadingOverlay />}
@@ -81,13 +92,32 @@ export function PlayersList({ players, ownerId, autoOpen = false }: { players: P
           <h1 className="text-lg font-semibold text-foreground">Jogadores</h1>
           <p className="text-sm text-muted-foreground">{players.length} {players.length === 1 ? 'jogador' : 'jogadores'}</p>
         </div>
+        {!readOnly && (
         <Button onClick={() => { setEditingPlayer(undefined); setSheetOpen(true) }} size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-1.5">
             <path d="M12 5v14M5 12h14" />
           </svg>
           Adicionar
         </Button>
+        )}
       </div>
+
+      {/* Search bar */}
+      {players.length > 0 && (
+        <div className="relative mb-3">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.3-4.3" />
+          </svg>
+          <input
+            type="text"
+            placeholder="Buscar jogador..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-10 w-full rounded-lg border border-border bg-secondary pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+          />
+        </div>
+      )}
 
       {players.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-12">
@@ -98,15 +128,19 @@ export function PlayersList({ players, ownerId, autoOpen = false }: { players: P
           </svg>
           <p className="text-sm text-muted-foreground">Nenhum jogador cadastrado</p>
         </div>
+      ) : filteredPlayers.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-12">
+          <p className="text-sm text-muted-foreground">Nenhum jogador encontrado</p>
+        </div>
       ) : (
         <div className="flex flex-col gap-2">
-          {players.map((player) => (
+          {filteredPlayers.map((player) => (
             <div key={player.id} className={cn(
               'rounded-xl border bg-card p-3',
               player.inNegotiation ? 'border-destructive/30' : 'border-border'
             )}>
               {/* Player header */}
-              <div className="flex items-center gap-3 mb-3">
+              <div className="flex items-center gap-3">
                 <div className={cn(
                   'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-sm font-bold',
                   player.inNegotiation ? 'bg-destructive/10 text-destructive' : 'bg-primary/10 text-primary'
@@ -124,7 +158,25 @@ export function PlayersList({ players, ownerId, autoOpen = false }: { players: P
                   </div>
                   <p className="text-xs text-muted-foreground">{player.position || 'Sem posição'}</p>
                 </div>
-                <div className="flex shrink-0 items-center gap-1">
+
+                {/* Inline stats */}
+                <div className="flex items-center gap-3 shrink-0">
+                  <div className="text-center">
+                    <p className="text-[10px] leading-tight text-muted-foreground">Partidas</p>
+                    <p className="text-sm font-bold text-foreground">{player.matches_played}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[10px] leading-tight text-muted-foreground">Gols</p>
+                    <p className="text-sm font-bold text-primary">{player.goals}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[10px] leading-tight text-muted-foreground">Assist.</p>
+                    <p className="text-sm font-bold text-foreground">{player.assists}</p>
+                  </div>
+                </div>
+
+                {!readOnly && (
+                <div className="flex shrink-0 items-center gap-0.5">
                   <Button
                     variant="ghost"
                     size="icon"
@@ -148,46 +200,14 @@ export function PlayersList({ players, ownerId, autoOpen = false }: { players: P
                     </svg>
                   </Button>
                 </div>
-              </div>
-
-              {/* Stats grid */}
-              <div className="grid grid-cols-4 gap-1 text-center">
-                <div className="rounded-lg bg-secondary/60 py-1.5 px-1">
-                  <p className="text-xs text-muted-foreground">Partidas</p>
-                  <p className="text-sm font-bold text-foreground">{player.matches_played}</p>
-                </div>
-                <div className="rounded-lg bg-secondary/60 py-1.5 px-1">
-                  <p className="text-xs text-muted-foreground">Presença</p>
-                  <p className="text-sm font-bold text-foreground">{pct(player.matches_played, player.total_matches)}</p>
-                </div>
-                <div className="rounded-lg bg-secondary/60 py-1.5 px-1">
-                  <p className="text-xs text-muted-foreground">Titular</p>
-                  <p className="text-sm font-bold text-foreground">{pct(player.matches_starter, player.matches_played)}</p>
-                </div>
-                <div className="rounded-lg bg-secondary/60 py-1.5 px-1">
-                  <p className="text-xs text-muted-foreground">Gols</p>
-                  <p className="text-sm font-bold text-primary">{player.goals}</p>
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-1 text-center mt-1">
-                <div className="rounded-lg bg-secondary/60 py-1.5 px-1">
-                  <p className="text-xs text-muted-foreground">Assist.</p>
-                  <p className="text-sm font-bold text-foreground">{player.assists}</p>
-                </div>
-                <div className="rounded-lg bg-secondary/60 py-1.5 px-1">
-                  <p className="text-xs text-muted-foreground">Amarelo</p>
-                  <p className="text-sm font-bold text-warning">{player.yellow_cards}</p>
-                </div>
-                <div className="rounded-lg bg-secondary/60 py-1.5 px-1">
-                  <p className="text-xs text-muted-foreground">Vermelho</p>
-                  <p className="text-sm font-bold text-destructive">{player.red_cards}</p>
-                </div>
+                )}
               </div>
             </div>
           ))}
         </div>
       )}
 
+      {!readOnly && (
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetContent side="bottom" className="bg-background border-border rounded-t-2xl max-h-[85svh] overflow-y-auto">
           <SheetHeader className="mb-4">
@@ -201,7 +221,9 @@ export function PlayersList({ players, ownerId, autoOpen = false }: { players: P
           />
         </SheetContent>
       </Sheet>
+      )}
 
+      {!readOnly && (
       <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
         <AlertDialogContent className="bg-card border-border max-w-sm">
           <AlertDialogHeader>
@@ -218,6 +240,7 @@ export function PlayersList({ players, ownerId, autoOpen = false }: { players: P
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      )}
     </>
   )
 }

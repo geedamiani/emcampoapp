@@ -1,19 +1,24 @@
 /**
  * PUBLIC SHARE PAGE (/t/[token])
  *
- * Read-only view of an account's stats. No login required.
- * Uses the admin client to bypass RLS (the token → owner_id lookup and all reads).
- * Uses players!match_events_player_id_fkey because match_events has two FKs to players.
+ * Read-only view of an account's stats, filtered by semester. No login required.
  */
 import { createAdminClient } from '@/lib/supabase/admin'
 import { StatCard } from '@/components/stat-card'
 import { RankingList } from '@/components/ranking-list'
 import { RecentMatches } from '@/components/recent-matches'
-import { BottomNav } from '@/components/bottom-nav'
 import { notFound } from 'next/navigation'
+import { resolveSemester, isDateInSemester } from '@/lib/semester'
 
-export default async function PublicTeamPage({ params }: { params: Promise<{ token: string }> }) {
+export default async function PublicTeamPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ token: string }>
+  searchParams: Promise<{ semester?: string }>
+}) {
   const { token } = await params
+  const { semester: semesterParam } = await searchParams
   const admin = createAdminClient()
 
   const { data: shareRow, error: shareError } = await admin
@@ -39,15 +44,21 @@ export default async function PublicTeamPage({ params }: { params: Promise<{ tok
   ])
   const playerNameById = Object.fromEntries((players || []).map(p => [p.id, p.name]))
 
-  const totalMatches = matches?.length || 0
-  const wins = matches?.filter((m) => m.goals_for > m.goals_against).length || 0
-  const draws = matches?.filter((m) => m.goals_for === m.goals_against).length || 0
-  const losses = matches?.filter((m) => m.goals_for < m.goals_against).length || 0
+  const matchDates = (matches || []).map(m => m.match_date).filter(Boolean)
+  const semester = resolveSemester(semesterParam ?? null, matchDates)
+  const matchesInSemester = (matches || []).filter(m => isDateInSemester(m.match_date, semester))
+  const matchIdsInSemester = new Set(matchesInSemester.map(m => m.id))
+  const eventsInSemester = (events || []).filter(e => matchIdsInSemester.has(e.match_id))
+
+  const totalMatches = matchesInSemester.length
+  const wins = matchesInSemester.filter((m) => m.goals_for > m.goals_against).length
+  const draws = matchesInSemester.filter((m) => m.goals_for === m.goals_against).length
+  const losses = matchesInSemester.filter((m) => m.goals_for < m.goals_against).length
   const pointsEarned = wins * 3 + draws
   const pointsPossible = totalMatches * 3
   const aproveitamento = pointsPossible > 0 ? Math.round((pointsEarned / pointsPossible) * 100) : 0
-  const golsMarcados = matches?.reduce((sum, m) => sum + (m.goals_for || 0), 0) || 0
-  const golsContra = matches?.reduce((sum, m) => sum + (m.goals_against || 0), 0) || 0
+  const golsMarcados = matchesInSemester.reduce((sum, m) => sum + (m.goals_for || 0), 0)
+  const golsContra = matchesInSemester.reduce((sum, m) => sum + (m.goals_against || 0), 0)
   const saldoGols = golsMarcados - golsContra
 
   const goalsByPlayer: Record<string, { name: string; count: number }> = {}
@@ -55,7 +66,7 @@ export default async function PublicTeamPage({ params }: { params: Promise<{ tok
   const yellowsByPlayer: Record<string, { name: string; count: number }> = {}
   const redsByPlayer: Record<string, { name: string; count: number }> = {}
 
-  for (const ev of events || []) {
+  for (const ev of eventsInSemester) {
     const pName = ev.players?.name || 'Desconhecido'
     const key = ev.player_id
     if (ev.event_type === 'goal') {
@@ -83,7 +94,7 @@ export default async function PublicTeamPage({ params }: { params: Promise<{ tok
       .sort((a, b) => b.count - a.count)
       .map((p) => ({ name: p.name, value: p.count }))
 
-  const recentMatches = (matches || []).slice(0, 5).map((m) => ({
+  const recentMatches = matchesInSemester.slice(0, 5).map((m) => ({
     id: m.id,
     opponent_name: m.opponent_teams?.name || 'Desconhecido',
     goals_for: m.goals_for,
@@ -92,9 +103,7 @@ export default async function PublicTeamPage({ params }: { params: Promise<{ tok
   }))
 
   return (
-    <div className="flex min-h-svh flex-col bg-background">
-      <main className="flex-1 pb-20">
-        <div className="mx-auto max-w-lg px-4 py-5">
+    <div className="mx-auto max-w-lg px-4 py-5">
         <div className="mb-5 flex items-center justify-between">
           <div>
             <h1 className="text-lg font-semibold text-foreground">Painel Geral</h1>
@@ -152,18 +161,11 @@ export default async function PublicTeamPage({ params }: { params: Promise<{ tok
             }
           />
         </div>
-        <div className="grid grid-cols-2 gap-3 mb-3">
+        <div className="grid grid-cols-2 gap-3 mb-6">
           <RankingList title="Artilheiros" items={toRanking(goalsByPlayer)} accent="primary" emptyMessage="Sem gols" />
           <RankingList title="Assistências" items={toRanking(assistsByPlayer)} accent="primary" emptyMessage="Sem assistências" />
         </div>
-        <div className="grid grid-cols-2 gap-3 mb-6">
-          <RankingList title="C. amarelos" items={toRanking(yellowsByPlayer)} accent="warning" emptyMessage="Sem cartões" />
-          <RankingList title="C. vermelhos" items={toRanking(redsByPlayer)} accent="destructive" emptyMessage="Sem cartões" />
-        </div>
         <RecentMatches matches={recentMatches} />
-        </div>
-      </main>
-      <BottomNav />
     </div>
   )
 }

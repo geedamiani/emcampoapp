@@ -84,6 +84,17 @@ function groupEventsByPlayer(events: MatchEvent[], type: string) {
   return Object.values(map)
 }
 
+function getGoalEntries(events: MatchEvent[], players: Player[]): { name: string; count: number }[] {
+  const nameById = Object.fromEntries(players.map(p => [p.id, p.name]))
+  const map: Record<string, { name: string; count: number }> = {}
+  for (const e of events.filter(ev => ev.event_type === 'goal')) {
+    const name = e.players?.name || nameById[e.player_id] || 'Desconhecido'
+    if (!map[e.player_id]) map[e.player_id] = { name, count: 0 }
+    map[e.player_id].count++
+  }
+  return Object.values(map)
+}
+
 function getAssistEntries(events: MatchEvent[], players: Player[]): { name: string; count: number }[] {
   const nameById = Object.fromEntries(players.map(p => [p.id, p.name]))
   const map: Record<string, { name: string; count: number }> = {}
@@ -99,28 +110,6 @@ function getAssistEntries(events: MatchEvent[], players: Player[]): { name: stri
     }
   }
   return Object.values(map)
-}
-
-function GoalsLine({ events, players }: { events: MatchEvent[]; players: Player[] }) {
-  const goals = events.filter(e => e.event_type === 'goal')
-  if (goals.length === 0) return null
-  const nameById = Object.fromEntries(players.map(p => [p.id, p.name]))
-  return (
-    <div className="flex items-start gap-2 text-xs">
-      <span className="shrink-0 font-semibold mt-px text-primary">Gols:</span>
-      <span className="text-foreground">
-        {goals.map((g, i) => (
-          <span key={g.id}>
-            {i > 0 && ', '}
-            <span className="font-medium">{g.players?.name || nameById[g.player_id] || 'Desconhecido'}</span>
-            {g.assistant_id && (
-              <span className="text-muted-foreground"> (assist. {nameById[g.assistant_id] || '?'})</span>
-            )}
-          </span>
-        ))}
-      </span>
-    </div>
-  )
 }
 
 function EventLine({ label, entries, color }: { label: string; entries: { name: string; count: number }[]; color: string }) {
@@ -147,12 +136,14 @@ export function MatchesList({
   players,
   ownerId,
   autoOpen = false,
+  readOnly = false,
 }: {
   matches: Match[]
   opponents: OpponentTeam[]
   players: Player[]
   ownerId: string
   autoOpen?: boolean
+  readOnly?: boolean
 }) {
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editingMatch, setEditingMatch] = useState<Match | undefined>(undefined)
@@ -199,12 +190,14 @@ export function MatchesList({
           <h1 className="text-lg font-semibold text-foreground">Partidas</h1>
           <p className="text-sm text-muted-foreground">{matches.length} {matches.length === 1 ? 'partida registrada' : 'partidas registradas'}</p>
         </div>
+        {!readOnly && (
         <Button onClick={() => { setEditingMatch(undefined); setSheetOpen(true) }} size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-1.5">
             <path d="M12 5v14M5 12h14" />
           </svg>
           Nova partida
         </Button>
+        )}
       </div>
 
       {matches.length === 0 ? (
@@ -222,6 +215,7 @@ export function MatchesList({
             const isExpanded = expandedId === match.id
             const playerCount = match.match_players?.length || 0
 
+            const goalEntries = getGoalEntries(match.match_events, players)
             const assistEntries = getAssistEntries(match.match_events, players)
             const yellows = groupEventsByPlayer(match.match_events, 'yellow_card')
             const reds = groupEventsByPlayer(match.match_events, 'red_card')
@@ -262,11 +256,11 @@ export function MatchesList({
                   <div className="border-t border-border px-3 pb-3 pt-2">
                     {playerCount > 0 ? (
                       <div className="mb-3 flex flex-col gap-1.5">
-                        <GoalsLine events={match.match_events} players={players} />
+                        <EventLine label="Gols" entries={goalEntries} color="text-primary" />
                         <EventLine label="Assist." entries={assistEntries} color="text-primary" />
                         <EventLine label="Amarelo" entries={yellows} color="text-warning" />
                         <EventLine label="Vermelho" entries={reds} color="text-destructive" />
-                        {match.match_events.filter(e => e.event_type === 'goal').length === 0 && assistEntries.length === 0 && yellows.length === 0 && reds.length === 0 && (
+                        {goalEntries.length === 0 && assistEntries.length === 0 && yellows.length === 0 && reds.length === 0 && (
                           <p className="text-xs text-muted-foreground">Nenhum evento registrado.</p>
                         )}
                       </div>
@@ -274,6 +268,7 @@ export function MatchesList({
                       <p className="mb-3 text-xs text-muted-foreground">Nenhum jogador escalado.</p>
                     )}
 
+                    {!readOnly && (
                     <div className="flex gap-2">
                       <Button
                         size="sm"
@@ -306,6 +301,7 @@ export function MatchesList({
                         </svg>
                       </Button>
                     </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -315,6 +311,7 @@ export function MatchesList({
       )}
 
       {/* New/Edit Match Sheet */}
+      {!readOnly && (
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetContent side="bottom" className="bg-background border-border rounded-t-2xl max-h-[85svh] overflow-y-auto">
           <SheetHeader className="mb-4">
@@ -330,8 +327,10 @@ export function MatchesList({
           />
         </SheetContent>
       </Sheet>
+      )}
 
       {/* Lineup Sheet */}
+      {!readOnly && (
       <Sheet open={lineupSheetOpen} onOpenChange={setLineupSheetOpen}>
         <SheetContent side="bottom" className="bg-background border-border rounded-t-2xl max-h-[90svh] overflow-y-auto">
           <SheetHeader className="mb-4">
@@ -355,8 +354,10 @@ export function MatchesList({
           )}
         </SheetContent>
       </Sheet>
+      )}
 
       {/* Delete Match Dialog */}
+      {!readOnly && (
       <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
         <AlertDialogContent className="bg-card border-border max-w-sm">
           <AlertDialogHeader>
@@ -373,6 +374,7 @@ export function MatchesList({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      )}
     </>
   )
 }

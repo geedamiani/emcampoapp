@@ -1,8 +1,15 @@
+/**
+ * OPPONENTS LIST COMPONENT
+ *
+ * Renders the list of opponent teams on the Adversários page.
+ * Each card shows: team name, record (wins/draws/losses).
+ * Includes a search bar to filter opponents by name.
+ */
 'use client'
 
 import React from "react"
 
-import { useState, useTransition } from 'react'
+import { useState, useMemo, useTransition } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
@@ -33,14 +40,21 @@ interface OpponentTeam {
   matches: MatchSummary[]
 }
 
-export function OpponentsList({ opponents, ownerId }: { opponents: OpponentTeam[]; ownerId: string }) {
+export function OpponentsList({ opponents, ownerId, readOnly = false }: { opponents: OpponentTeam[]; ownerId: string; readOnly?: boolean }) {
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editingOpponent, setEditingOpponent] = useState<OpponentTeam | null>(null)
   const [name, setName] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
   const [isPending, startTransition] = useTransition()
   const router = useRouter()
+
+  const filteredOpponents = useMemo(() => {
+    if (!search.trim()) return opponents
+    const q = search.trim().toLowerCase()
+    return opponents.filter(o => o.name.toLowerCase().includes(q))
+  }, [opponents, search])
 
   const refreshData = () => {
     startTransition(() => {
@@ -115,13 +129,32 @@ export function OpponentsList({ opponents, ownerId }: { opponents: OpponentTeam[
           <h1 className="text-lg font-semibold text-foreground">Adversários</h1>
           <p className="text-sm text-muted-foreground">{opponents.length} {opponents.length === 1 ? 'time cadastrado' : 'times cadastrados'}</p>
         </div>
+        {!readOnly && (
         <Button onClick={handleAdd} size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-1.5">
             <path d="M12 5v14M5 12h14" />
           </svg>
           Adicionar
         </Button>
+        )}
       </div>
+
+      {/* Search bar */}
+      {opponents.length > 0 && (
+        <div className="relative mb-3">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.3-4.3" />
+          </svg>
+          <input
+            type="text"
+            placeholder="Buscar adversário..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-10 w-full rounded-lg border border-border bg-secondary pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+          />
+        </div>
+      )}
 
       {opponents.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-12">
@@ -134,9 +167,13 @@ export function OpponentsList({ opponents, ownerId }: { opponents: OpponentTeam[
             Cadastrar primeiro adversário
           </Button>
         </div>
+      ) : filteredOpponents.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-12">
+          <p className="text-sm text-muted-foreground">Nenhum adversário encontrado</p>
+        </div>
       ) : (
         <div className="flex flex-col gap-2">
-          {opponents.map((opponent) => {
+          {filteredOpponents.map((opponent) => {
             const record = getRecord(opponent.matches)
             return (
               <div key={opponent.id} className="flex items-center gap-3 rounded-xl border border-border bg-card p-3">
@@ -153,6 +190,7 @@ export function OpponentsList({ opponents, ownerId }: { opponents: OpponentTeam[
                     <p className="text-xs text-muted-foreground">Nenhum jogo registrado</p>
                   )}
                 </div>
+                {!readOnly && (
                 <div className="flex shrink-0 items-center gap-1">
                   <Button
                     variant="ghost"
@@ -177,12 +215,14 @@ export function OpponentsList({ opponents, ownerId }: { opponents: OpponentTeam[
                     </svg>
                   </Button>
                 </div>
+                )}
               </div>
             )
           })}
         </div>
       )}
 
+      {!readOnly && (
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetContent side="bottom" className="bg-background border-border rounded-t-2xl">
           <SheetHeader className="mb-4">
@@ -211,7 +251,9 @@ export function OpponentsList({ opponents, ownerId }: { opponents: OpponentTeam[
           </form>
         </SheetContent>
       </Sheet>
+      )}
 
+      {!readOnly && (
       <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
         <AlertDialogContent className="bg-card border-border max-w-sm">
           <AlertDialogHeader>
@@ -228,6 +270,7 @@ export function OpponentsList({ opponents, ownerId }: { opponents: OpponentTeam[
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      )}
     </>
   )
 }

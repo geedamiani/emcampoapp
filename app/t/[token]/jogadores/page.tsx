@@ -1,23 +1,34 @@
 /**
- * JOGADORES PAGE
+ * PUBLIC JOGADORES PAGE (/t/[token]/jogadores)
  *
- * Shows all players with their stats (matches played, goals, assists, cards),
- * filtered by the selected semester.
+ * Read-only view of players for the shared account, filtered by semester. No login required.
  */
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { PlayersList } from '@/components/players-list'
-import { getEffectiveOwnerId } from '@/lib/get-effective-owner'
+import { notFound } from 'next/navigation'
 import { resolveSemester, isDateInSemester } from '@/lib/semester'
 
-export default async function PlayersPage({ searchParams }: { searchParams: Promise<{ action?: string; semester?: string }> }) {
-  const params = await searchParams
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    const { redirect } = await import('next/navigation')
-    redirect('/auth/login')
-  }
-  const ownerId = await getEffectiveOwnerId(supabase, user.id)
+export const dynamic = 'force-dynamic'
+
+export default async function PublicJogadoresPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ token: string }>
+  searchParams: Promise<{ semester?: string }>
+}) {
+  const { token } = await params
+  const { semester: semesterParam } = await searchParams
+  const admin = createAdminClient()
+
+  const { data: shareRow, error: shareError } = await admin
+    .from('team_share')
+    .select('owner_id')
+    .eq('token', token)
+    .single()
+
+  if (shareError || !shareRow) notFound()
+  const ownerId = shareRow.owner_id
 
   const [
     { data: players },
@@ -25,20 +36,18 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
     { data: events },
     { data: matches },
   ] = await Promise.all([
-    supabase.from('players').select('*').eq('user_id', ownerId).order('name'),
-    supabase.from('match_players').select('*').eq('user_id', ownerId),
-    supabase.from('match_events').select('player_id, event_type, assistant_id, match_id').eq('user_id', ownerId),
-    supabase.from('matches').select('id, match_date').eq('user_id', ownerId).order('match_date', { ascending: false }),
+    admin.from('players').select('*').eq('user_id', ownerId).order('name'),
+    admin.from('match_players').select('*').eq('user_id', ownerId),
+    admin.from('match_events').select('player_id, event_type, assistant_id').eq('user_id', ownerId),
+    admin.from('matches').select('id, match_date').eq('user_id', ownerId).order('match_date', { ascending: false }),
   ])
 
   const matchDates = (matches || []).map(m => m.match_date).filter(Boolean)
-  const semester = resolveSemester(params.semester ?? null, matchDates)
+  const semester = resolveSemester(semesterParam ?? null, matchDates)
   const matchesInSemester = (matches || []).filter(m => isDateInSemester(m.match_date, semester))
   const matchIdsInSemester = new Set(matchesInSemester.map(m => m.id))
 
   const totalMatches = matchesInSemester.length
-
-  // Get last 5 match IDs for "em negociacao" logic (within semester)
   const last5MatchIds = matchesInSemester.slice(0, 5).map(m => m.id)
   const last5PlayerIds = new Set(
     (matchPlayers || [])
@@ -50,7 +59,6 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
   const playersWithStats = (players || []).map(p => {
     const playerMatches = (matchPlayers || []).filter(mp => mp.player_id === p.id && matchIdsInSemester.has(mp.match_id))
     const playerEvents = (events || []).filter(ev => ev.player_id === p.id && matchIdsInSemester.has(ev.match_id))
-
     return {
       id: p.id,
       name: p.name,
@@ -71,7 +79,12 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
 
   return (
     <div className="mx-auto max-w-lg px-4 py-5">
-      <PlayersList players={playersWithStats} ownerId={ownerId} autoOpen={params.action === 'new'} />
+      <div className="mb-3 flex items-center justify-end">
+        <span className="rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
+          Somente leitura
+        </span>
+      </div>
+      <PlayersList players={playersWithStats} ownerId={ownerId} readOnly />
     </div>
   )
 }

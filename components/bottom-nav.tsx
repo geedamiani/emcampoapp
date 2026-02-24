@@ -1,6 +1,6 @@
 'use client'
 
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useTransition } from 'react'
 import { cn } from '@/lib/utils'
 
@@ -53,7 +53,18 @@ const navItems = [
 export function BottomNav() {
   const pathname = usePathname()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [isPending, startTransition] = useTransition()
+
+  const isPublicView = pathname.startsWith('/t/')
+  const token = isPublicView ? pathname.split('/')[2] : null
+  const baseHref = token ? `/t/${token}` : '/dashboard'
+
+  const navItemsWithHref = navItems.map((item) => {
+    const path = item.href === '/dashboard' ? baseHref : `${baseHref}${item.href.replace('/dashboard', '')}`
+    const params = searchParams.toString()
+    return { ...item, href: params ? `${path}?${params}` : path }
+  })
 
   const handleNavigate = (href: string) => {
     startTransition(() => {
@@ -73,10 +84,11 @@ export function BottomNav() {
       )}
       <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background/80 backdrop-blur-xl safe-area-bottom" role="navigation" aria-label="Menu principal">
         <div className="mx-auto flex max-w-lg items-center justify-around px-2 pb-1 pt-2">
-          {navItems.map((item) => {
-            const isActive = item.href === '/dashboard'
-              ? pathname === '/dashboard'
-              : pathname.startsWith(item.href)
+          {navItemsWithHref.map((item) => {
+            const pathOnly = item.href.split('?')[0]
+            const isActive = pathOnly === baseHref
+              ? pathname === baseHref || pathname === `${baseHref}/`
+              : pathname.startsWith(pathOnly)
             return (
               <button
                 key={item.href}
