@@ -150,11 +150,6 @@ export function PlayersList({ players, ownerId, autoOpen = false, readOnly = fal
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="truncate text-sm font-medium text-foreground">{player.name}</p>
-                    {player.inNegotiation && (
-                      <span className="shrink-0 rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-semibold text-destructive">
-                        Em negociação
-                      </span>
-                    )}
                   </div>
                   <p className="text-xs text-muted-foreground">{player.position || 'Sem posição'}</p>
                 </div>

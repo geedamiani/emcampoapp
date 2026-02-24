@@ -75,7 +75,7 @@ export default async function DashboardLayout({
           </div>
         </div>
       )}
-      <main className="flex-1 pb-20">
+      <main className="flex-1 pb-nav">
         {children}
       </main>
       <BottomNav />

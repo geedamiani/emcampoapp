@@ -47,7 +47,7 @@ export default async function PublicShareLayout({
           </Suspense>
         </div>
       </div>
-      <main className="flex-1 pb-20">
+      <main className="flex-1 pb-nav">
         {children}
       </main>
       <BottomNav />

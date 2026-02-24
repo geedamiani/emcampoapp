@@ -82,7 +82,7 @@ export function BottomNav() {
           </div>
         </div>
       )}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background/80 backdrop-blur-xl safe-area-bottom" role="navigation" aria-label="Menu principal">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background/80 backdrop-blur-xl safe-area-bottom [transform:translateZ(0)]" role="navigation" aria-label="Menu principal">
         <div className="mx-auto flex max-w-lg items-center justify-around px-2 pb-1 pt-2">
           {navItemsWithHref.map((item) => {
             const pathOnly = item.href.split('?')[0]
