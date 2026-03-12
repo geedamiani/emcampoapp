@@ -9,7 +9,7 @@
 
 import React from "react"
 
-import { useState, useMemo, useTransition } from 'react'
+import { useState, useMemo, useTransition, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,7 @@ import { Label } from '@/components/ui/label'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { toast } from 'sonner'
 import { LoadingOverlay } from '@/components/loading-overlay'
+import { cn } from '@/lib/utils'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,6 +41,27 @@ interface OpponentTeam {
   matches: MatchSummary[]
 }
 
+function getRecord(matches: MatchSummary[]) {
+  const w = matches.filter(m => m.goals_for > m.goals_against).length
+  const d = matches.filter(m => m.goals_for === m.goals_against).length
+  const l = matches.filter(m => m.goals_for < m.goals_against).length
+  return { w, d, l, total: matches.length }
+}
+
+type SortKey = 'name' | 'total' | 'w' | 'd' | 'l'
+type SortDir = 'asc' | 'desc'
+
+function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
+  return (
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+      className={cn('ml-0.5 inline-block transition-opacity', active ? 'opacity-100' : 'opacity-30')}>
+      {active && dir === 'asc'
+        ? <path d="M12 19V5M5 12l7-7 7 7" />
+        : <path d="M12 5v14M5 12l7 7 7-7" />}
+    </svg>
+  )
+}
+
 export function OpponentsList({ opponents, ownerId, readOnly = false }: { opponents: OpponentTeam[]; ownerId: string; readOnly?: boolean }) {
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editingOpponent, setEditingOpponent] = useState<OpponentTeam | null>(null)
@@ -47,14 +69,40 @@ export function OpponentsList({ opponents, ownerId, readOnly = false }: { oppone
   const [isLoading, setIsLoading] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [sortKey, setSortKey] = useState<SortKey>('name')
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [isPending, startTransition] = useTransition()
   const router = useRouter()
 
-  const filteredOpponents = useMemo(() => {
-    if (!search.trim()) return opponents
-    const q = search.trim().toLowerCase()
-    return opponents.filter(o => o.name.toLowerCase().includes(q))
-  }, [opponents, search])
+  const handleSort = useCallback((key: SortKey) => {
+    setSortKey(prev => {
+      if (prev === key) {
+        setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+        return key
+      }
+      setSortDir(key === 'name' ? 'asc' : 'desc')
+      return key
+    })
+  }, [])
+
+  const displayedOpponents = useMemo(() => {
+    let list = opponents
+    if (search.trim()) {
+      const q = search.trim().toLowerCase()
+      list = list.filter(o => o.name.toLowerCase().includes(q))
+    }
+    return [...list].sort((a, b) => {
+      const ra = getRecord(a.matches)
+      const rb = getRecord(b.matches)
+      let cmp = 0
+      if (sortKey === 'name') cmp = a.name.localeCompare(b.name)
+      else if (sortKey === 'total') cmp = ra.total - rb.total
+      else if (sortKey === 'w') cmp = ra.w - rb.w
+      else if (sortKey === 'd') cmp = ra.d - rb.d
+      else if (sortKey === 'l') cmp = ra.l - rb.l
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+  }, [opponents, search, sortKey, sortDir])
 
   const refreshData = () => {
     startTransition(() => {
@@ -114,13 +162,6 @@ export function OpponentsList({ opponents, ownerId, readOnly = false }: { oppone
     setDeleteId(null)
   }
 
-  function getRecord(matches: MatchSummary[]) {
-    const w = matches.filter(m => m.goals_for > m.goals_against).length
-    const d = matches.filter(m => m.goals_for === m.goals_against).length
-    const l = matches.filter(m => m.goals_for < m.goals_against).length
-    return { w, d, l, total: matches.length }
-  }
-
   return (
     <>
       {isPending && <LoadingOverlay />}
@@ -167,58 +208,88 @@ export function OpponentsList({ opponents, ownerId, readOnly = false }: { oppone
             Cadastrar primeiro adversário
           </Button>
         </div>
-      ) : filteredOpponents.length === 0 ? (
+      ) : displayedOpponents.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-12">
           <p className="text-sm text-muted-foreground">Nenhum adversário encontrado</p>
         </div>
       ) : (
-        <div className="flex flex-col gap-2">
-          {filteredOpponents.map((opponent) => {
-            const record = getRecord(opponent.matches)
-            return (
-              <div key={opponent.id} className="flex items-center gap-3 rounded-xl border border-border bg-card p-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent text-sm font-bold text-accent-foreground">
-                  {opponent.name.slice(0, 2).toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="truncate text-sm font-medium text-foreground">{opponent.name}</p>
-                  {record.total > 0 ? (
-                    <p className="text-xs text-muted-foreground">
-                      {record.total} {record.total === 1 ? 'jogo' : 'jogos'} &middot; {record.w}V {record.d}E {record.l}D
-                    </p>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">Nenhum jogo registrado</p>
-                  )}
-                </div>
-                {!readOnly && (
-                <div className="flex shrink-0 items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                    onClick={() => handleEdit(opponent)}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
-                      <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
-                    </svg>
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                    onClick={() => setDeleteId(opponent.id)}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polyline points="3 6 5 6 21 6" />
-                      <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
-                    </svg>
-                  </Button>
-                </div>
-                )}
-              </div>
-            )
-          })}
+        <div className="overflow-hidden rounded-xl border border-border">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-muted/40">
+                <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">
+                  <button onClick={() => handleSort('name')} className="flex items-center hover:text-foreground transition-colors">
+                    Adversário <SortIcon active={sortKey === 'name'} dir={sortDir} />
+                  </button>
+                </th>
+                <th className="w-12 px-2 py-2 text-center text-xs font-medium text-muted-foreground">
+                  <button onClick={() => handleSort('total')} className="inline-flex items-center hover:text-foreground transition-colors">
+                    Jogos <SortIcon active={sortKey === 'total'} dir={sortDir} />
+                  </button>
+                </th>
+                <th className="w-10 px-2 py-2 text-center text-xs font-medium text-muted-foreground">
+                  <button onClick={() => handleSort('w')} className="inline-flex items-center hover:text-foreground transition-colors">
+                    V <SortIcon active={sortKey === 'w'} dir={sortDir} />
+                  </button>
+                </th>
+                <th className="w-10 px-2 py-2 text-center text-xs font-medium text-muted-foreground">
+                  <button onClick={() => handleSort('d')} className="inline-flex items-center hover:text-foreground transition-colors">
+                    E <SortIcon active={sortKey === 'd'} dir={sortDir} />
+                  </button>
+                </th>
+                <th className="w-10 px-2 py-2 text-center text-xs font-medium text-muted-foreground">
+                  <button onClick={() => handleSort('l')} className="inline-flex items-center hover:text-foreground transition-colors">
+                    D <SortIcon active={sortKey === 'l'} dir={sortDir} />
+                  </button>
+                </th>
+                {!readOnly && <th className="w-16" />}
+              </tr>
+            </thead>
+            <tbody>
+              {displayedOpponents.map((opponent) => {
+                const record = getRecord(opponent.matches)
+                return (
+                  <tr key={opponent.id} className="border-b border-border last:border-0">
+                    <td className="px-3 py-2.5">
+                      <p className="truncate text-sm font-medium text-foreground">{opponent.name}</p>
+                    </td>
+                    <td className="px-2 py-2.5 text-center text-sm font-bold text-foreground">{record.total}</td>
+                    <td className="px-2 py-2.5 text-center text-sm font-bold text-primary">{record.w}</td>
+                    <td className="px-2 py-2.5 text-center text-sm font-bold text-muted-foreground">{record.d}</td>
+                    <td className="px-2 py-2.5 text-center text-sm font-bold text-destructive">{record.l}</td>
+                    {!readOnly && (
+                      <td className="px-2 py-2.5">
+                        <div className="flex items-center justify-end gap-0.5">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                            onClick={() => handleEdit(opponent)}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                              <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                            </svg>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            onClick={() => setDeleteId(opponent.id)}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <polyline points="3 6 5 6 21 6" />
+                              <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                            </svg>
+                          </Button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
       )}
 

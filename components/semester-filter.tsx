@@ -1,14 +1,14 @@
 /**
- * SEMESTER FILTER
+ * PERIOD FILTER
  *
- * Global filter for stats. Shows a dropdown of semesters (those with at least 1 match).
- * Updates the URL ?semester=YYYY-H so all pages use the same filter.
+ * Global filter for stats. Shows a dropdown of years (those with at least 1 match)
+ * plus "Tudo" (all time). Updates ?semester= URL param so all pages share the filter.
  */
 'use client'
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useEffect } from 'react'
-import { formatSemester, type Semester } from '@/lib/semester'
+import { type Semester } from '@/lib/semester'
 import {
   Select,
   SelectContent,
@@ -28,8 +28,11 @@ export function SemesterFilter({ availableSemesters, defaultSemester }: Semester
   const searchParams = useSearchParams()
 
   const semesterParam = searchParams.get('semester')
-  const isValidParam = semesterParam && (availableSemesters.length === 0 || availableSemesters.includes(semesterParam))
-  const currentSemester = isValidParam ? semesterParam : defaultSemester
+  const isValidParam =
+    semesterParam === 'all' ||
+    semesterParam === defaultSemester ||
+    (semesterParam !== null && availableSemesters.includes(semesterParam))
+  const currentSemester = isValidParam && semesterParam ? semesterParam : defaultSemester
 
   // Sync URL when semester is missing or invalid (e.g. first load)
   useEffect(() => {
@@ -46,23 +49,27 @@ export function SemesterFilter({ availableSemesters, defaultSemester }: Semester
     router.push(`${pathname}?${params.toString()}`, { scroll: false })
   }
 
-  const options = availableSemesters.length > 0
+  // Build year options: include current year even if no matches yet
+  const yearOptions = availableSemesters.includes(defaultSemester)
     ? availableSemesters
-    : [defaultSemester]
+    : [defaultSemester, ...availableSemesters].sort((a, b) => Number(b) - Number(a))
 
   return (
     <div className="ml-auto flex items-center gap-2">
       <span className="text-xs text-muted-foreground">Período:</span>
       <Select value={currentSemester} onValueChange={handleChange}>
-        <SelectTrigger className="h-8 w-[140px] text-xs border-border">
+        <SelectTrigger className="h-8 w-[100px] text-xs border-border">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {options.map((s) => (
-            <SelectItem key={s} value={s} className="text-xs">
-              {formatSemester(s)}
+          {yearOptions.map((y) => (
+            <SelectItem key={y} value={y} className="text-xs">
+              {y}
             </SelectItem>
           ))}
+          <SelectItem value="all" className="text-xs">
+            Tudo
+          </SelectItem>
         </SelectContent>
       </Select>
     </div>

@@ -1,11 +1,9 @@
 /**
  * PLAYERS LIST COMPONENT
  *
- * Renders the list of players on the Jogadores page.
- * Each player card shows: name, position, and stats (Partidas, Gols, Assist.) in a horizontal row.
- * Includes a search bar to filter players by name.
- *
- * Hidden for now (still collected): Presença, Titular, Cartões Amarelos, Cartões Vermelhos.
+ * Renders the list of players on the Jogadores page as a sortable table.
+ * Columns: Jogador (name + position), Jogos, Gols, Assist.
+ * Includes search, position filter chips, and sortable column headers.
  */
 'use client'
 
@@ -44,19 +42,69 @@ interface PlayerStats {
   inNegotiation: boolean
 }
 
+type SortKey = 'name' | 'matches_played' | 'goals' | 'assists'
+type SortDir = 'asc' | 'desc'
+
+function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
+  return (
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+      className={cn('ml-0.5 inline-block transition-opacity', active ? 'opacity-100' : 'opacity-30')}>
+      {active && dir === 'asc'
+        ? <path d="M12 19V5M5 12l7-7 7 7" />
+        : <path d="M12 5v14M5 12l7 7 7-7" />}
+    </svg>
+  )
+}
+
 export function PlayersList({ players, ownerId, autoOpen = false, readOnly = false }: { players: PlayerStats[]; ownerId: string; autoOpen?: boolean; readOnly?: boolean }) {
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editingPlayer, setEditingPlayer] = useState<PlayerStats | undefined>(undefined)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const [search, setSearch] = useState('')
+  const [positionFilter, setPositionFilter] = useState<string | null>(null)
+  const [sortKey, setSortKey] = useState<SortKey>('name')
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
   const router = useRouter()
 
-  const filteredPlayers = useMemo(() => {
-    if (!search.trim()) return players
-    const q = search.trim().toLowerCase()
-    return players.filter(p => p.name.toLowerCase().includes(q))
-  }, [players, search])
+  const positions = useMemo(() => {
+    const set = new Set<string>()
+    for (const p of players) {
+      if (p.position) set.add(p.position)
+    }
+    return Array.from(set).sort()
+  }, [players])
+
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortKey(key)
+      setSortDir(key === 'name' ? 'asc' : 'desc')
+    }
+  }
+
+  const displayedPlayers = useMemo(() => {
+    let list = players
+
+    if (search.trim()) {
+      const q = search.trim().toLowerCase()
+      list = list.filter(p => p.name.toLowerCase().includes(q))
+    }
+
+    if (positionFilter) {
+      list = list.filter(p => p.position === positionFilter)
+    }
+
+    return [...list].sort((a, b) => {
+      let cmp = 0
+      if (sortKey === 'name') cmp = a.name.localeCompare(b.name)
+      else if (sortKey === 'matches_played') cmp = a.matches_played - b.matches_played
+      else if (sortKey === 'goals') cmp = a.goals - b.goals
+      else if (sortKey === 'assists') cmp = a.assists - b.assists
+      return sortDir === 'asc' ? cmp : -cmp
+    })
+  }, [players, search, positionFilter, sortKey, sortDir])
 
   const refreshData = () => {
     startTransition(() => {
@@ -93,30 +141,63 @@ export function PlayersList({ players, ownerId, autoOpen = false, readOnly = fal
           <p className="text-sm text-muted-foreground">{players.length} {players.length === 1 ? 'jogador' : 'jogadores'}</p>
         </div>
         {!readOnly && (
-        <Button onClick={() => { setEditingPlayer(undefined); setSheetOpen(true) }} size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-1.5">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-          Adicionar
-        </Button>
+          <Button onClick={() => { setEditingPlayer(undefined); setSheetOpen(true) }} size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-1.5">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            Adicionar
+          </Button>
         )}
       </div>
 
-      {/* Search bar */}
       {players.length > 0 && (
-        <div className="relative mb-3">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-            <circle cx="11" cy="11" r="8" />
-            <path d="m21 21-4.3-4.3" />
-          </svg>
-          <input
-            type="text"
-            placeholder="Buscar jogador..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="h-10 w-full rounded-lg border border-border bg-secondary pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-          />
-        </div>
+        <>
+          {/* Search bar */}
+          <div className="relative mb-2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+              <circle cx="11" cy="11" r="8" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
+            <input
+              type="text"
+              placeholder="Buscar jogador..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-10 w-full rounded-lg border border-border bg-secondary pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
+          </div>
+
+          {/* Position filter chips */}
+          {positions.length > 0 && (
+            <div className="mb-3 flex flex-wrap gap-1.5">
+              <button
+                onClick={() => setPositionFilter(null)}
+                className={cn(
+                  'rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors',
+                  positionFilter === null
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground hover:text-foreground'
+                )}
+              >
+                Todos
+              </button>
+              {positions.map(pos => (
+                <button
+                  key={pos}
+                  onClick={() => setPositionFilter(positionFilter === pos ? null : pos)}
+                  className={cn(
+                    'rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors',
+                    positionFilter === pos
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  {pos}
+                </button>
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       {players.length === 0 ? (
@@ -128,113 +209,126 @@ export function PlayersList({ players, ownerId, autoOpen = false, readOnly = fal
           </svg>
           <p className="text-sm text-muted-foreground">Nenhum jogador cadastrado</p>
         </div>
-      ) : filteredPlayers.length === 0 ? (
+      ) : displayedPlayers.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-12">
           <p className="text-sm text-muted-foreground">Nenhum jogador encontrado</p>
         </div>
       ) : (
-        <div className="flex flex-col gap-2">
-          {filteredPlayers.map((player) => (
-            <div key={player.id} className={cn(
-              'rounded-xl border bg-card p-3',
-              player.inNegotiation ? 'border-destructive/30' : 'border-border'
-            )}>
-              {/* Player header */}
-              <div className="flex items-center gap-3">
-                <div className={cn(
-                  'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-sm font-bold',
-                  player.inNegotiation ? 'bg-destructive/10 text-destructive' : 'bg-primary/10 text-primary'
+        <div className="overflow-hidden rounded-xl border border-border">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-muted/40">
+                <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">
+                  <button onClick={() => handleSort('name')} className="flex items-center hover:text-foreground transition-colors">
+                    Jogador <SortIcon active={sortKey === 'name'} dir={sortDir} />
+                  </button>
+                </th>
+                <th className="w-12 px-2 py-2 text-center text-xs font-medium text-muted-foreground">
+                  <button onClick={() => handleSort('matches_played')} className="inline-flex items-center hover:text-foreground transition-colors">
+                    Jogos <SortIcon active={sortKey === 'matches_played'} dir={sortDir} />
+                  </button>
+                </th>
+                <th className="w-12 px-2 py-2 text-center text-xs font-medium text-muted-foreground">
+                  <button onClick={() => handleSort('goals')} className="inline-flex items-center hover:text-foreground transition-colors">
+                    Gols <SortIcon active={sortKey === 'goals'} dir={sortDir} />
+                  </button>
+                </th>
+                <th className="w-14 px-2 py-2 text-center text-xs font-medium text-muted-foreground">
+                  <button onClick={() => handleSort('assists')} className="inline-flex items-center hover:text-foreground transition-colors">
+                    Assist. <SortIcon active={sortKey === 'assists'} dir={sortDir} />
+                  </button>
+                </th>
+                {!readOnly && <th className="w-16" />}
+              </tr>
+            </thead>
+            <tbody>
+              {displayedPlayers.map((player) => (
+                <tr key={player.id} className={cn(
+                  'border-b border-border last:border-0',
+                  player.inNegotiation && 'bg-destructive/5'
                 )}>
-                  {player.name.slice(0, 2).toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="truncate text-sm font-medium text-foreground">{player.name}</p>
-                  </div>
-                  <p className="text-xs text-muted-foreground">{player.position || 'Sem posição'}</p>
-                </div>
-
-                {/* Inline stats */}
-                <div className="flex items-center gap-3 shrink-0">
-                  <div className="text-center">
-                    <p className="text-[10px] leading-tight text-muted-foreground">Partidas</p>
-                    <p className="text-sm font-bold text-foreground">{player.matches_played}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-[10px] leading-tight text-muted-foreground">Gols</p>
-                    <p className="text-sm font-bold text-primary">{player.goals}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-[10px] leading-tight text-muted-foreground">Assist.</p>
-                    <p className="text-sm font-bold text-foreground">{player.assists}</p>
-                  </div>
-                </div>
-
-                {!readOnly && (
-                <div className="flex shrink-0 items-center gap-0.5">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                    onClick={() => { setEditingPlayer(player); setSheetOpen(true) }}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
-                      <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
-                    </svg>
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                    onClick={() => setDeleteId(player.id)}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polyline points="3 6 5 6 21 6" />
-                      <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
-                    </svg>
-                  </Button>
-                </div>
-                )}
-              </div>
-            </div>
-          ))}
+                  <td className="px-3 py-2.5">
+                    <div className="flex items-center gap-2">
+                      {player.inNegotiation && (
+                        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-destructive" />
+                      )}
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium leading-tight text-foreground">{player.name}</p>
+                        <p className="text-xs text-muted-foreground">{player.position || 'Sem posição'}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-2 py-2.5 text-center text-sm font-bold text-foreground">{player.matches_played}</td>
+                  <td className="px-2 py-2.5 text-center text-sm font-bold text-primary">{player.goals}</td>
+                  <td className="px-2 py-2.5 text-center text-sm font-bold text-foreground">{player.assists}</td>
+                  {!readOnly && (
+                    <td className="px-2 py-2.5">
+                      <div className="flex items-center justify-end gap-0.5">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                          onClick={() => { setEditingPlayer(player); setSheetOpen(true) }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                          </svg>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                          onClick={() => setDeleteId(player.id)}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                          </svg>
+                        </Button>
+                      </div>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
       {!readOnly && (
-      <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent side="bottom" className="bg-background border-border rounded-t-2xl max-h-[85svh] overflow-y-auto">
-          <SheetHeader className="mb-4">
-            <SheetTitle className="text-foreground">{editingPlayer ? 'Editar jogador' : 'Novo jogador'}</SheetTitle>
-          </SheetHeader>
-          <PlayerForm
-            player={editingPlayer ? { id: editingPlayer.id, name: editingPlayer.name, position: editingPlayer.position, whatsapp: editingPlayer.whatsapp } : undefined}
-            ownerId={ownerId}
-            onClose={() => setSheetOpen(false)}
-            onRefresh={refreshData}
-          />
-        </SheetContent>
-      </Sheet>
+        <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+          <SheetContent side="bottom" className="bg-background border-border rounded-t-2xl max-h-[85svh] overflow-y-auto">
+            <SheetHeader className="mb-4">
+              <SheetTitle className="text-foreground">{editingPlayer ? 'Editar jogador' : 'Novo jogador'}</SheetTitle>
+            </SheetHeader>
+            <PlayerForm
+              player={editingPlayer ? { id: editingPlayer.id, name: editingPlayer.name, position: editingPlayer.position, whatsapp: editingPlayer.whatsapp } : undefined}
+              ownerId={ownerId}
+              onClose={() => setSheetOpen(false)}
+              onRefresh={refreshData}
+            />
+          </SheetContent>
+        </Sheet>
       )}
 
       {!readOnly && (
-      <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
-        <AlertDialogContent className="bg-card border-border max-w-sm">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-foreground">Excluir jogador?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Essa ação não pode ser desfeita. Todos os eventos vinculados a esse jogador também serão excluídos.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="border-border text-muted-foreground">Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Excluir
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
+          <AlertDialogContent className="bg-card border-border max-w-sm">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-foreground">Excluir jogador?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Essa ação não pode ser desfeita. Todos os eventos vinculados a esse jogador também serão excluídos.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="border-border text-muted-foreground">Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                Excluir
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       )}
     </>
   )

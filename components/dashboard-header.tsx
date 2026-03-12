@@ -71,7 +71,18 @@ export function DashboardHeader({ teamName: serverTeamName, shareLink }: Dashboa
               size="icon"
               className="h-8 w-8 text-muted-foreground hover:text-foreground"
               onClick={async () => {
-                await navigator.clipboard.writeText(shareLink)
+                try {
+                  await navigator.clipboard.writeText(shareLink)
+                } catch {
+                  const el = document.createElement('textarea')
+                  el.value = shareLink
+                  el.style.position = 'fixed'
+                  el.style.opacity = '0'
+                  document.body.appendChild(el)
+                  el.select()
+                  document.execCommand('copy')
+                  document.body.removeChild(el)
+                }
                 toast.success('Link de visualização copiado!')
               }}
               aria-label="Compartilhar link de visualização"
