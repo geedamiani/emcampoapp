@@ -43,21 +43,37 @@ export function MatchForm({ opponents: initialOpponents, match, ownerId, onClose
   const router = useRouter()
   const isEditing = !!match
 
+  const withTimeout = async <T,>(promise: Promise<T>, ms = 15000): Promise<T> => {
+    let timeoutId: ReturnType<typeof setTimeout>
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error('Tempo limite excedido. Verifique sua conexão e tente novamente.')), ms)
+    })
+    try {
+      return await Promise.race([promise, timeoutPromise])
+    } finally {
+      clearTimeout(timeoutId!)
+    }
+  }
+
   const handleCreateOpponent = async () => {
     if (!newOpponentName.trim()) return
     setIsCreatingOpponent(true)
+    try {
+      const supabase = createClient()
 
-    const supabase = createClient()
+      const { data, error } = await withTimeout(
+        supabase
+          .from('opponent_teams')
+          .insert({ name: newOpponentName.trim(), user_id: ownerId })
+          .select()
+          .single()
+      )
 
-    const { data, error } = await supabase
-      .from('opponent_teams')
-      .insert({ name: newOpponentName.trim(), user_id: ownerId })
-      .select()
-      .single()
+      if (error || !data) {
+        toast.error(error?.message || 'Erro ao criar adversário')
+        return
+      }
 
-    if (error || !data) {
-      toast.error('Erro ao criar adversário')
-    } else {
       const updated = [...opponents, data].sort((a, b) => a.name.localeCompare(b.name))
       setOpponents(updated)
       setOpponentId(data.id)
@@ -65,8 +81,12 @@ export function MatchForm({ opponents: initialOpponents, match, ownerId, onClose
       setNewOpponentName('')
       onOpponentsChange?.(updated)
       toast.success('Adversário adicionado')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Erro inesperado ao criar adversário'
+      toast.error(message)
+    } finally {
+      setIsCreatingOpponent(false)
     }
-    setIsCreatingOpponent(false)
   }
 
   const handleOpponentChange = (value: string) => {
@@ -87,37 +107,42 @@ export function MatchForm({ opponents: initialOpponents, match, ownerId, onClose
     }
     setIsLoading(true)
 
-    const supabase = createClient()
+    try {
+      const supabase = createClient()
 
-    const payload = {
-      opponent_id: opponentId,
-      match_date: matchDate.trim(),
-      goals_for: Number.parseInt(goalsFor, 10) || 0,
-      goals_against: Number.parseInt(goalsAgainst, 10) || 0,
-      user_id: ownerId,
-    }
-
-    if (isEditing) {
-      const { error } = await supabase.from('matches').update(payload).eq('id', match.id)
-      setIsLoading(false)
-      if (error) {
-        toast.error(error.message || 'Erro ao atualizar partida')
-        return
+      const payload = {
+        opponent_id: opponentId,
+        match_date: matchDate.trim(),
+        goals_for: Number.parseInt(goalsFor, 10) || 0,
+        goals_against: Number.parseInt(goalsAgainst, 10) || 0,
+        user_id: ownerId,
       }
-      toast.success('Partida atualizada')
-    } else {
-      const { error } = await supabase.from('matches').insert(payload)
-      setIsLoading(false)
-      if (error) {
-        toast.error(error.message || 'Erro ao registrar partida')
-        return
-      }
-      toast.success('Partida registrada')
-    }
 
-    if (onRefresh) onRefresh()
-    else router.refresh()
-    onClose()
+      if (isEditing) {
+        const { error } = await withTimeout(supabase.from('matches').update(payload).eq('id', match.id))
+        if (error) {
+          toast.error(error.message || 'Erro ao atualizar partida')
+          return
+        }
+        toast.success('Partida atualizada')
+      } else {
+        const { error } = await withTimeout(supabase.from('matches').insert(payload))
+        if (error) {
+          toast.error(error.message || 'Erro ao registrar partida')
+          return
+        }
+        toast.success('Partida registrada')
+      }
+
+      if (onRefresh) onRefresh()
+      else router.refresh()
+      onClose()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Erro inesperado ao salvar partida'
+      toast.error(message)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (

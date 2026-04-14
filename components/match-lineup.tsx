@@ -101,6 +101,18 @@ export function MatchLineup({ matchId, players, ownerId, existingMatchPlayers, e
   const [showPicker, setShowPicker] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
+  const withTimeout = async <T,>(promise: Promise<T>, ms = 15000): Promise<T> => {
+    let timeoutId: ReturnType<typeof setTimeout>
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error('Tempo limite excedido. Verifique sua conexão e tente novamente.')), ms)
+    })
+    try {
+      return await Promise.race([promise, timeoutPromise])
+    } finally {
+      clearTimeout(timeoutId!)
+    }
+  }
+
   const buildInitialLineup = useCallback((): PlayerLineup[] => {
     return existingMatchPlayers.map(mp => {
       const player = players.find(p => p.id === mp.player_id)
@@ -193,25 +205,32 @@ export function MatchLineup({ matchId, players, ownerId, existingMatchPlayers, e
 
   const handleSave = async () => {
     setIsSaving(true)
-    const lineupPayload = lineup.map(l => ({
-      playerId: l.playerId,
-      starter: l.starter,
-      yellowCards: l.yellowCards,
-      redCards: l.redCards,
-    }))
-    const goalPayload = goalEntries.map(g => ({
-      scorerId: g.scorerId,
-      assistantId: g.assistantId,
-    }))
-    const result = await saveLineup(matchId, ownerId, lineupPayload, goalPayload)
-    setIsSaving(false)
-    if (result.error) {
-      toast.error(result.error)
-      return
+    try {
+      const lineupPayload = lineup.map(l => ({
+        playerId: l.playerId,
+        starter: l.starter,
+        yellowCards: l.yellowCards,
+        redCards: l.redCards,
+      }))
+      const goalPayload = goalEntries.map(g => ({
+        scorerId: g.scorerId,
+        assistantId: g.assistantId,
+      }))
+      const result = await withTimeout(saveLineup(matchId, ownerId, lineupPayload, goalPayload))
+      if (result.error) {
+        toast.error(result.error)
+        return
+      }
+      toast.success(result.eventsCount ? `Escalação salva (${result.eventsCount} eventos)` : 'Escalação salva')
+      onClose()
+      if (onRefresh) onRefresh()
+      else router.push('/dashboard/partidas')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Erro inesperado ao salvar escalação'
+      toast.error(message)
+    } finally {
+      setIsSaving(false)
     }
-    toast.success(result.eventsCount ? `Escalação salva (${result.eventsCount} eventos)` : 'Escalação salva')
-    onClose()
-    router.push('/dashboard/partidas')
   }
 
   return (

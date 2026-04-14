@@ -74,6 +74,18 @@ export function OpponentsList({ opponents, ownerId, readOnly = false }: { oppone
   const [isPending, startTransition] = useTransition()
   const router = useRouter()
 
+  const withTimeout = async <T,>(promise: Promise<T>, ms = 15000): Promise<T> => {
+    let timeoutId: ReturnType<typeof setTimeout>
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error('Tempo limite excedido. Verifique sua conexão e tente novamente.')), ms)
+    })
+    try {
+      return await Promise.race([promise, timeoutPromise])
+    } finally {
+      clearTimeout(timeoutId!)
+    }
+  }
+
   const handleSort = useCallback((key: SortKey) => {
     setSortKey(prev => {
       if (prev === key) {
@@ -125,28 +137,33 @@ export function OpponentsList({ opponents, ownerId, readOnly = false }: { oppone
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
+    try {
+      const supabase = createClient()
 
-    const supabase = createClient()
-
-    if (editingOpponent) {
-      const { error } = await supabase.from('opponent_teams').update({ name }).eq('id', editingOpponent.id)
-      if (error) {
-        toast.error('Erro ao atualizar time')
-      } else {
+      if (editingOpponent) {
+        const { error } = await withTimeout(supabase.from('opponent_teams').update({ name }).eq('id', editingOpponent.id))
+        if (error) {
+          toast.error(error.message || 'Erro ao atualizar time')
+          return
+        }
         toast.success('Time atualizado')
-      }
-    } else {
-      const { error } = await supabase.from('opponent_teams').insert({ name, user_id: ownerId })
-      if (error) {
-        toast.error('Erro ao cadastrar time')
       } else {
+        const { error } = await withTimeout(supabase.from('opponent_teams').insert({ name, user_id: ownerId }))
+        if (error) {
+          toast.error(error.message || 'Erro ao cadastrar time')
+          return
+        }
         toast.success('Time cadastrado')
       }
-    }
 
-    setIsLoading(false)
-    refreshData()
-    setSheetOpen(false)
+      refreshData()
+      setSheetOpen(false)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Erro inesperado ao salvar adversário'
+      toast.error(message)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleDelete = async () => {

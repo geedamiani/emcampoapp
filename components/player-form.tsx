@@ -40,39 +40,57 @@ export function PlayerForm({ player, ownerId, onClose, onRefresh }: PlayerFormPr
   const router = useRouter()
   const isEditing = !!player
 
+  const withTimeout = async <T,>(promise: Promise<T>, ms = 15000): Promise<T> => {
+    let timeoutId: ReturnType<typeof setTimeout>
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error('Tempo limite excedido. Verifique sua conexão e tente novamente.')), ms)
+    })
+    try {
+      return await Promise.race([promise, timeoutPromise])
+    } finally {
+      clearTimeout(timeoutId!)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
 
-    const supabase = createClient()
+    try {
+      const supabase = createClient()
 
-    const payload = {
-      name,
-      position: position || null,
-      whatsapp: whatsapp || null,
-      user_id: ownerId,
-    }
-
-    if (isEditing) {
-      const { error } = await supabase.from('players').update(payload).eq('id', player.id)
-      if (error) {
-        toast.error('Erro ao atualizar jogador')
-      } else {
-        toast.success('Jogador atualizado')
+      const payload = {
+        name,
+        position: position || null,
+        whatsapp: whatsapp || null,
+        user_id: ownerId,
       }
-    } else {
-      const { error } = await supabase.from('players').insert(payload)
-      if (error) {
-        toast.error('Erro ao cadastrar jogador')
+
+      if (isEditing) {
+        const { error } = await withTimeout(supabase.from('players').update(payload).eq('id', player.id))
+        if (error) {
+          toast.error(error.message || 'Erro ao atualizar jogador')
+          return
+        }
+        toast.success('Jogador atualizado')
       } else {
+        const { error } = await withTimeout(supabase.from('players').insert(payload))
+        if (error) {
+          toast.error(error.message || 'Erro ao cadastrar jogador')
+          return
+        }
         toast.success('Jogador cadastrado')
       }
-    }
 
-    setIsLoading(false)
-    if (onRefresh) onRefresh()
-    else router.refresh()
-    onClose()
+      if (onRefresh) onRefresh()
+      else router.refresh()
+      onClose()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Erro inesperado ao salvar jogador'
+      toast.error(message)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (

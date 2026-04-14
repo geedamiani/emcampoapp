@@ -39,18 +39,36 @@ export function InviteAdmins({ ownerId, teamName, usersWithAccess, pendingInvite
   const [isDeleting, setIsDeleting] = useState(false)
   const router = useRouter()
 
+  const withTimeout = async <T,>(promise: Promise<T>, ms = 15000): Promise<T> => {
+    let timeoutId: ReturnType<typeof setTimeout>
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error('Tempo limite excedido. Verifique sua conexão e tente novamente.')), ms)
+    })
+    try {
+      return await Promise.race([promise, timeoutPromise])
+    } finally {
+      clearTimeout(timeoutId!)
+    }
+  }
+
   const handleDelete = async () => {
     if (!deleteId) return
     setIsDeleting(true)
-    const result = await deletePendingInviteAction(deleteId, ownerId)
-    if (result.success) {
-      toast.success('Convite excluído')
-      setDeleteId(null)
-      router.refresh()
-    } else {
-      toast.error(result.error || 'Erro ao excluir convite')
+    try {
+      const result = await withTimeout(deletePendingInviteAction(deleteId, ownerId))
+      if (result.success) {
+        toast.success('Convite excluído')
+        setDeleteId(null)
+        router.refresh()
+      } else {
+        toast.error(result.error || 'Erro ao excluir convite')
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Erro inesperado ao excluir convite'
+      toast.error(message)
+    } finally {
+      setIsDeleting(false)
     }
-    setIsDeleting(false)
   }
 
   const handleInvite = async (e: React.FormEvent) => {
@@ -58,22 +76,27 @@ export function InviteAdmins({ ownerId, teamName, usersWithAccess, pendingInvite
     if (!email.trim()) return
 
     setIsLoading(true)
-    const origin = typeof window !== 'undefined' ? window.location.origin : ''
-    const result = await createInviteAction(ownerId, email.trim(), origin, teamName)
+    try {
+      const origin = typeof window !== 'undefined' ? window.location.origin : ''
+      const result = await withTimeout(createInviteAction(ownerId, email.trim(), origin, teamName))
 
-    if (!result.success) {
-      toast.error(result.error || 'Erro ao criar convite')
+      if (!result.success) {
+        toast.error(result.error || 'Erro ao criar convite')
+        return
+      }
+
+      if (result.inviteLink) {
+        await navigator.clipboard.writeText(result.inviteLink)
+        toast.success('Link copiado! Envie por WhatsApp ou como preferir.')
+      }
+      setEmail('')
+      router.refresh()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Erro inesperado ao criar convite'
+      toast.error(message)
+    } finally {
       setIsLoading(false)
-      return
     }
-
-    if (result.inviteLink) {
-      await navigator.clipboard.writeText(result.inviteLink)
-      toast.success('Link copiado! Envie por WhatsApp ou como preferir.')
-    }
-    setEmail('')
-    setIsLoading(false)
-    router.refresh()
   }
 
   return (
