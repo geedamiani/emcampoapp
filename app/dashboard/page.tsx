@@ -102,53 +102,36 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         </p>
       </div>
 
-      {/* Row 1: Aproveitamento + Saldo de gols */}
-      <div className="grid grid-cols-2 gap-3 mb-3">
+      {/* Top KPIs */}
+      <div className="mb-6 grid grid-cols-4 gap-2">
+        <div className="min-w-0">
         <StatCard
           label="Aproveitamento"
           value={`${aproveitamento}%`}
           accent="primary"
-          icon={
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 20V10" /><path d="M18 20V4" /><path d="M6 20v-4" />
-            </svg>
-          }
         />
+        </div>
+        <div className="min-w-0">
         <StatCard
           label="Saldo de gols"
           value={saldoGols >= 0 ? `+${saldoGols}` : `${saldoGols}`}
           accent={saldoGols >= 0 ? 'primary' : 'destructive'}
-          icon={
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M8 3H5a2 2 0 0 0-2 2v3" /><path d="M21 8V5a2 2 0 0 0-2-2h-3" />
-              <path d="M3 16v3a2 2 0 0 0 2 2h3" /><path d="M16 21h3a2 2 0 0 0 2-2v-3" />
-            </svg>
-          }
         />
-      </div>
-
-      {/* Row 2: Gols marcados + Gols contra */}
-      <div className="grid grid-cols-2 gap-3 mb-6">
+        </div>
+        <div className="min-w-0">
         <StatCard
           label="Gols marcados"
           value={golsMarcados}
           accent="primary"
-          icon={
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" /><path d="m9 12 2 2 4-4" />
-            </svg>
-          }
         />
+        </div>
+        <div className="min-w-0">
         <StatCard
           label="Gols contra"
           value={golsContra}
           accent="destructive"
-          icon={
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" /><path d="m15 9-6 6" /><path d="m9 9 6 6" />
-            </svg>
-          }
         />
+        </div>
       </div>
 
       {/* Artilheiros + Assistencias side by side */}

@@ -52,7 +52,7 @@ export default async function MatchesPage({ searchParams }: { searchParams: Prom
       .order('name'),
     supabase
       .from('players')
-      .select('id, name')
+      .select('id, name, position')
       .eq('user_id', ownerId)
       .order('name'),
     eventsClient

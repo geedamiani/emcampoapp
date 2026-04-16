@@ -36,6 +36,7 @@ interface OpponentTeam {
 interface Player {
   id: string
   name: string
+  position?: string | null
 }
 
 interface MatchPlayer {
@@ -110,6 +111,34 @@ function getAssistEntries(events: MatchEvent[], players: Player[]): { name: stri
     }
   }
   return Object.values(map)
+}
+
+function getPositionRank(position?: string | null): number {
+  const normalized = (position || '').trim().toLowerCase()
+  if (normalized === 'goleiro') return 0
+  if (normalized === 'lateral direito') return 1
+  if (normalized === 'zagueiro' || normalized === 'zagueiros') return 2
+  if (normalized === 'lateral esquerdo' || normalized === 'laterais esquerdo' || normalized === 'laterais esquerdos') return 3
+  if (normalized === 'volante' || normalized === 'volantes') return 4
+  if (normalized === 'meia' || normalized === 'meias') return 5
+  if (normalized === 'atacante' || normalized === 'atacantes') return 6
+  return 99
+}
+
+function getLineupEntries(matchPlayers: MatchPlayer[], players: Player[], starters: boolean): { name: string; count: number }[] {
+  const playerById = Object.fromEntries(players.map(p => [p.id, p]))
+  return matchPlayers
+    .filter(mp => ((mp.was_starter ?? mp.starter ?? false) === starters))
+    .map(mp => {
+      const player = playerById[mp.player_id]
+      return {
+        name: player?.name || 'Desconhecido',
+        count: 1,
+        rank: getPositionRank(player?.position),
+      }
+    })
+    .sort((a, b) => (a.rank - b.rank) || a.name.localeCompare(b.name))
+    .map(({ name, count }) => ({ name, count }))
 }
 
 function EventLine({ label, entries, color }: { label: string; entries: { name: string; count: number }[]; color: string }) {
@@ -214,6 +243,8 @@ export function MatchesList({
             const result = getResultInfo(match.goals_for, match.goals_against)
             const isExpanded = expandedId === match.id
             const playerCount = match.match_players?.length || 0
+            const starterEntries = getLineupEntries(match.match_players || [], players, true)
+            const reserveEntries = getLineupEntries(match.match_players || [], players, false)
 
             const goalEntries = getGoalEntries(match.match_events, players)
             const assistEntries = getAssistEntries(match.match_events, players)
@@ -256,11 +287,13 @@ export function MatchesList({
                   <div className="border-t border-border px-3 pb-3 pt-2">
                     {playerCount > 0 ? (
                       <div className="mb-3 flex flex-col gap-1.5">
+                        <EventLine label="Titulares" entries={starterEntries} color="text-foreground" />
+                        <EventLine label="Reservas" entries={reserveEntries} color="text-muted-foreground" />
                         <EventLine label="Gols" entries={goalEntries} color="text-primary" />
                         <EventLine label="Assist." entries={assistEntries} color="text-primary" />
                         <EventLine label="Amarelo" entries={yellows} color="text-warning" />
                         <EventLine label="Vermelho" entries={reds} color="text-destructive" />
-                        {goalEntries.length === 0 && assistEntries.length === 0 && yellows.length === 0 && reds.length === 0 && (
+                        {starterEntries.length === 0 && reserveEntries.length === 0 && goalEntries.length === 0 && assistEntries.length === 0 && yellows.length === 0 && reds.length === 0 && (
                           <p className="text-xs text-muted-foreground">Nenhum evento registrado.</p>
                         )}
                       </div>

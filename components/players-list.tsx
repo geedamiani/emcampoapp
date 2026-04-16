@@ -56,6 +56,11 @@ function SortIcon({ active, dir }: { active: boolean; dir: SortDir }) {
   )
 }
 
+function getStarterRate(matchesPlayed: number, matchesStarter: number): number {
+  if (matchesPlayed <= 0) return 0
+  return Math.round((matchesStarter / matchesPlayed) * 100)
+}
+
 export function PlayersList({ players, ownerId, autoOpen = false, readOnly = false }: { players: PlayerStats[]; ownerId: string; autoOpen?: boolean; readOnly?: boolean }) {
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editingPlayer, setEditingPlayer] = useState<PlayerStats | undefined>(undefined)
@@ -229,6 +234,9 @@ export function PlayersList({ players, ownerId, autoOpen = false, readOnly = fal
                   </button>
                 </th>
                 <th className="w-12 px-2 py-2 text-center text-xs font-medium text-muted-foreground">
+                  Tit.
+                </th>
+                <th className="w-12 px-2 py-2 text-center text-xs font-medium text-muted-foreground">
                   <button onClick={() => handleSort('goals')} className="inline-flex items-center hover:text-foreground transition-colors">
                     Gols <SortIcon active={sortKey === 'goals'} dir={sortDir} />
                   </button>
@@ -259,6 +267,9 @@ export function PlayersList({ players, ownerId, autoOpen = false, readOnly = fal
                     </div>
                   </td>
                   <td className="px-2 py-2.5 text-center text-sm font-bold text-foreground">{player.matches_played}</td>
+                  <td className="px-2 py-2.5 text-center text-sm font-bold text-foreground">
+                    {getStarterRate(player.matches_played, player.matches_starter)}%
+                  </td>
                   <td className="px-2 py-2.5 text-center text-sm font-bold text-primary">{player.goals}</td>
                   <td className="px-2 py-2.5 text-center text-sm font-bold text-foreground">{player.assists}</td>
                   {!readOnly && (
