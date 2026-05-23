@@ -48,13 +48,6 @@ export default async function PublicJogadoresPage({
   const matchIdsInSemester = new Set(matchesInSemester.map(m => m.id))
 
   const totalMatches = matchesInSemester.length
-  const last5MatchIds = matchesInSemester.slice(0, 5).map(m => m.id)
-  const last5PlayerIds = new Set(
-    (matchPlayers || [])
-      .filter(mp => last5MatchIds.includes(mp.match_id))
-      .map(mp => mp.player_id)
-  )
-  const hasEnough = last5MatchIds.length >= 5
 
   const playersWithStats = (players || []).map(p => {
     const playerMatches = (matchPlayers || []).filter(mp => mp.player_id === p.id && matchIdsInSemester.has(mp.match_id))
@@ -73,7 +66,6 @@ export default async function PublicJogadoresPage({
         playerEvents.filter(ev => ev.event_type === 'assist').length,
       yellow_cards: playerEvents.filter(ev => ev.event_type === 'yellow_card').length,
       red_cards: playerEvents.filter(ev => ev.event_type === 'red_card').length,
-      inNegotiation: hasEnough && !last5PlayerIds.has(p.id),
     }
   })
 

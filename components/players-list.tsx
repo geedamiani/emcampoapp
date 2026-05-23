@@ -39,7 +39,6 @@ interface PlayerStats {
   assists: number
   yellow_cards: number
   red_cards: number
-  inNegotiation: boolean
 }
 
 type SortKey = 'name' | 'matches_played' | 'goals' | 'assists'
@@ -251,15 +250,9 @@ export function PlayersList({ players, ownerId, autoOpen = false, readOnly = fal
             </thead>
             <tbody>
               {displayedPlayers.map((player) => (
-                <tr key={player.id} className={cn(
-                  'border-b border-border last:border-0',
-                  player.inNegotiation && 'bg-destructive/5'
-                )}>
+                <tr key={player.id} className="border-b border-border last:border-0">
                   <td className="px-3 py-2.5">
                     <div className="flex items-center gap-2">
-                      {player.inNegotiation && (
-                        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-destructive" />
-                      )}
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium leading-tight text-foreground">{player.name}</p>
                         <p className="text-xs text-muted-foreground">{player.position || 'Sem posição'}</p>

@@ -38,15 +38,6 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
 
   const totalMatches = matchesInSemester.length
 
-  // Get last 5 match IDs for "em negociacao" logic (within semester)
-  const last5MatchIds = matchesInSemester.slice(0, 5).map(m => m.id)
-  const last5PlayerIds = new Set(
-    (matchPlayers || [])
-      .filter(mp => last5MatchIds.includes(mp.match_id))
-      .map(mp => mp.player_id)
-  )
-  const hasEnough = last5MatchIds.length >= 5
-
   const playersWithStats = (players || []).map(p => {
     const playerMatches = (matchPlayers || []).filter(mp => mp.player_id === p.id && matchIdsInSemester.has(mp.match_id))
     const playerEvents = (events || []).filter(ev => ev.player_id === p.id && matchIdsInSemester.has(ev.match_id))
@@ -65,7 +56,6 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
         playerEvents.filter(ev => ev.event_type === 'assist').length,
       yellow_cards: playerEvents.filter(ev => ev.event_type === 'yellow_card').length,
       red_cards: playerEvents.filter(ev => ev.event_type === 'red_card').length,
-      inNegotiation: hasEnough && !last5PlayerIds.has(p.id),
     }
   })
 

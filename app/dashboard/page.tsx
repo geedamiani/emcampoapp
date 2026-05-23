@@ -1,15 +1,13 @@
 /**
  * DASHBOARD (Painel Geral)
  *
- * Shows overview stats for the current account, filtered by semester.
- * Uses players!match_events_player_id_fkey because match_events has two FKs to players.
+ * Visual analytics overview for the current account, filtered by semester.
  */
 import { createClient } from '@/lib/supabase/server'
-import { StatCard } from '@/components/stat-card'
-import { RankingList } from '@/components/ranking-list'
-import { RecentMatches } from '@/components/recent-matches'
+import { DashboardOverview } from '@/components/dashboard-overview'
 import { getEffectiveOwnerId } from '@/lib/get-effective-owner'
 import { resolveSemester, isDateInSemester } from '@/lib/semester'
+import { buildDashboardStats } from '@/lib/dashboard-stats'
 
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ semester?: string }> }) {
   const params = await searchParams
@@ -21,127 +19,49 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   }
   const userId = await getEffectiveOwnerId(supabase, user.id)
 
+  let dataClient = supabase
+  try {
+    const { createAdminClient } = await import('@/lib/supabase/admin')
+    dataClient = createAdminClient()
+  } catch {
+    // fall back to user-scoped client
+  }
+
   const [
     { data: matches },
     { data: events },
     { data: players },
+    { data: matchPlayers },
   ] = await Promise.all([
     supabase.from('matches').select('*, opponent_teams(name)').eq('user_id', userId).order('match_date', { ascending: false }),
-    supabase.from('match_events').select('*, players!match_events_player_id_fkey(name)').eq('user_id', userId),
+    dataClient.from('match_events').select('*, players!match_events_player_id_fkey(name)').eq('user_id', userId),
     supabase.from('players').select('id, name').eq('user_id', userId),
+    dataClient.from('match_players').select('*').eq('user_id', userId),
   ])
 
   const matchDates = (matches || []).map(m => m.match_date).filter(Boolean)
   const semester = resolveSemester(params.semester ?? null, matchDates)
   const matchesInSemester = (matches || []).filter(m => isDateInSemester(m.match_date, semester))
   const matchIdsInSemester = new Set(matchesInSemester.map(m => m.id))
-  const eventsInSemester = (events || []).filter(e => matchIdsInSemester.has(e.match_id))
 
-  const playerNameById = Object.fromEntries((players || []).map(p => [p.id, p.name]))
-  const totalMatches = matchesInSemester.length
-  const wins = matchesInSemester.filter(m => m.goals_for > m.goals_against).length
-  const draws = matchesInSemester.filter(m => m.goals_for === m.goals_against).length
-  const losses = matchesInSemester.filter(m => m.goals_for < m.goals_against).length
-
-  const pointsEarned = wins * 3 + draws
-  const pointsPossible = totalMatches * 3
-  const aproveitamento = pointsPossible > 0 ? Math.round((pointsEarned / pointsPossible) * 100) : 0
-
-  const golsMarcados = matchesInSemester.reduce((sum, m) => sum + (m.goals_for || 0), 0)
-  const golsContra = matchesInSemester.reduce((sum, m) => sum + (m.goals_against || 0), 0)
-  const saldoGols = golsMarcados - golsContra
-
-  // Event rankings
-  const goalsByPlayer: Record<string, { name: string; count: number }> = {}
-  const assistsByPlayer: Record<string, { name: string; count: number }> = {}
-  const yellowsByPlayer: Record<string, { name: string; count: number }> = {}
-  const redsByPlayer: Record<string, { name: string; count: number }> = {}
-
-  for (const ev of eventsInSemester) {
-    const pName = ev.players?.name || 'Desconhecido'
-    const key = ev.player_id
-    if (ev.event_type === 'goal') {
-      if (!goalsByPlayer[key]) goalsByPlayer[key] = { name: pName, count: 0 }
-      goalsByPlayer[key].count++
-      if (ev.assistant_id) {
-        const aName = playerNameById[ev.assistant_id] || 'Desconhecido'
-        if (!assistsByPlayer[ev.assistant_id]) assistsByPlayer[ev.assistant_id] = { name: aName, count: 0 }
-        assistsByPlayer[ev.assistant_id].count++
-      }
-    } else if (ev.event_type === 'assist') {
-      if (!assistsByPlayer[key]) assistsByPlayer[key] = { name: pName, count: 0 }
-      assistsByPlayer[key].count++
-    } else if (ev.event_type === 'yellow_card') {
-      if (!yellowsByPlayer[key]) yellowsByPlayer[key] = { name: pName, count: 0 }
-      yellowsByPlayer[key].count++
-    } else if (ev.event_type === 'red_card') {
-      if (!redsByPlayer[key]) redsByPlayer[key] = { name: pName, count: 0 }
-      redsByPlayer[key].count++
-    }
+  let teamName = (user?.user_metadata?.team_name as string) || 'Meu Time'
+  try {
+    const { createAdminClient } = await import('@/lib/supabase/admin')
+    const admin = createAdminClient()
+    const { data: ownerUser } = await admin.auth.admin.getUserById(userId)
+    teamName = (ownerUser?.user?.user_metadata?.team_name as string) || teamName
+  } catch {
+    // fall back to current user metadata
   }
 
-  const toRanking = (map: Record<string, { name: string; count: number }>) =>
-    Object.values(map).sort((a, b) => b.count - a.count).map(p => ({ name: p.name, value: p.count }))
+  const stats = buildDashboardStats({
+    teamName,
+    matches: matches || [],
+    events: events || [],
+    players: players || [],
+    matchPlayers: matchPlayers || [],
+    matchIdsInSemester,
+  })
 
-  const recentMatches = matchesInSemester.slice(0, 5).map(m => ({
-    id: m.id,
-    opponent_name: m.opponent_teams?.name || 'Desconhecido',
-    goals_for: m.goals_for,
-    goals_against: m.goals_against,
-    match_date: m.match_date,
-  }))
-
-  const teamName = user?.user_metadata?.team_name || 'Meu Time'
-
-  return (
-    <div className="mx-auto max-w-lg px-4 py-5">
-      <div className="mb-5">
-        <h1 className="text-lg font-semibold text-foreground">Painel Geral</h1>
-        <p className="text-sm text-muted-foreground">
-          {teamName} &middot; {totalMatches} {totalMatches === 1 ? 'partida' : 'partidas'} &middot; {wins}V {draws}E {losses}D
-        </p>
-      </div>
-
-      {/* Top KPIs */}
-      <div className="mb-6 grid grid-cols-4 gap-2">
-        <div className="min-w-0">
-        <StatCard
-          label="Aproveitamento"
-          value={`${aproveitamento}%`}
-          accent="primary"
-        />
-        </div>
-        <div className="min-w-0">
-        <StatCard
-          label="Saldo de gols"
-          value={saldoGols >= 0 ? `+${saldoGols}` : `${saldoGols}`}
-          accent={saldoGols >= 0 ? 'primary' : 'destructive'}
-        />
-        </div>
-        <div className="min-w-0">
-        <StatCard
-          label="Gols marcados"
-          value={golsMarcados}
-          accent="primary"
-        />
-        </div>
-        <div className="min-w-0">
-        <StatCard
-          label="Gols contra"
-          value={golsContra}
-          accent="destructive"
-        />
-        </div>
-      </div>
-
-      {/* Artilheiros + Assistencias side by side */}
-      <div className="grid grid-cols-2 gap-3 mb-6">
-        <RankingList title="Artilheiros" items={toRanking(goalsByPlayer)} accent="primary" emptyMessage="Sem gols" />
-        <RankingList title="Assistências" items={toRanking(assistsByPlayer)} accent="primary" emptyMessage="Sem assistências" />
-      </div>
-
-      {/* Recent matches */}
-      <RecentMatches matches={recentMatches} />
-    </div>
-  )
+  return <DashboardOverview stats={stats} />
 }

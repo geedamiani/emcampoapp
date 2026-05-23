@@ -85,30 +85,30 @@ function groupEventsByPlayer(events: MatchEvent[], type: string) {
   return Object.values(map)
 }
 
-function getGoalEntries(events: MatchEvent[], players: Player[]): { name: string; count: number }[] {
+interface GoalAssistEntry {
+  id: string
+  scorerName: string
+  assistantName: string | null
+}
+
+function getGoalAssistEntries(events: MatchEvent[], players: Player[]): GoalAssistEntry[] {
+  const nameById = Object.fromEntries(players.map(p => [p.id, p.name]))
+  return events
+    .filter(ev => ev.event_type === 'goal')
+    .map(e => ({
+      id: e.id,
+      scorerName: e.players?.name || nameById[e.player_id] || 'Desconhecido',
+      assistantName: e.assistant_id ? nameById[e.assistant_id] || 'Desconhecido' : null,
+    }))
+}
+
+function getStandaloneAssistEntries(events: MatchEvent[], players: Player[]): { name: string; count: number }[] {
   const nameById = Object.fromEntries(players.map(p => [p.id, p.name]))
   const map: Record<string, { name: string; count: number }> = {}
-  for (const e of events.filter(ev => ev.event_type === 'goal')) {
+  for (const e of events.filter(ev => ev.event_type === 'assist')) {
     const name = e.players?.name || nameById[e.player_id] || 'Desconhecido'
     if (!map[e.player_id]) map[e.player_id] = { name, count: 0 }
     map[e.player_id].count++
-  }
-  return Object.values(map)
-}
-
-function getAssistEntries(events: MatchEvent[], players: Player[]): { name: string; count: number }[] {
-  const nameById = Object.fromEntries(players.map(p => [p.id, p.name]))
-  const map: Record<string, { name: string; count: number }> = {}
-  for (const e of events) {
-    if (e.event_type === 'goal' && e.assistant_id) {
-      const name = nameById[e.assistant_id] || 'Desconhecido'
-      if (!map[e.assistant_id]) map[e.assistant_id] = { name, count: 0 }
-      map[e.assistant_id].count++
-    } else if (e.event_type === 'assist') {
-      const name = e.players?.name || nameById[e.player_id] || 'Desconhecido'
-      if (!map[e.player_id]) map[e.player_id] = { name, count: 0 }
-      map[e.player_id].count++
-    }
   }
   return Object.values(map)
 }
@@ -155,6 +155,34 @@ function EventLine({ label, entries, color }: { label: string; entries: { name: 
           </span>
         ))}
       </span>
+    </div>
+  )
+}
+
+function GoalAssistList({ entries }: { entries: GoalAssistEntry[] }) {
+  if (entries.length === 0) return null
+  return (
+    <div className="rounded-lg border border-primary/15 bg-primary/5 px-2.5 py-2">
+      <p className="mb-1.5 text-xs font-semibold text-primary">Gols</p>
+      <ul className="flex flex-col gap-1">
+        {entries.map((entry, idx) => (
+          <li key={entry.id} className="flex items-baseline gap-1.5 text-xs">
+            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[10px] font-semibold text-primary tabular-nums">
+              {idx + 1}
+            </span>
+            <span className="font-medium text-foreground">{entry.scorerName}</span>
+            {entry.assistantName ? (
+              <>
+                <span className="shrink-0 text-muted-foreground" aria-hidden="true">←</span>
+                <span className="text-muted-foreground">
+                  <span className="sr-only">assistência de </span>
+                  {entry.assistantName}
+                </span>
+              </>
+            ) : null}
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }
@@ -246,8 +274,8 @@ export function MatchesList({
             const starterEntries = getLineupEntries(match.match_players || [], players, true)
             const reserveEntries = getLineupEntries(match.match_players || [], players, false)
 
-            const goalEntries = getGoalEntries(match.match_events, players)
-            const assistEntries = getAssistEntries(match.match_events, players)
+            const goalAssistEntries = getGoalAssistEntries(match.match_events, players)
+            const standaloneAssistEntries = getStandaloneAssistEntries(match.match_events, players)
             const yellows = groupEventsByPlayer(match.match_events, 'yellow_card')
             const reds = groupEventsByPlayer(match.match_events, 'red_card')
 
@@ -286,14 +314,14 @@ export function MatchesList({
                 {isExpanded && (
                   <div className="border-t border-border px-3 pb-3 pt-2">
                     {playerCount > 0 ? (
-                      <div className="mb-3 flex flex-col gap-1.5">
+                      <div className="mb-3 flex flex-col gap-2">
                         <EventLine label="Titulares" entries={starterEntries} color="text-foreground" />
                         <EventLine label="Reservas" entries={reserveEntries} color="text-muted-foreground" />
-                        <EventLine label="Gols" entries={goalEntries} color="text-primary" />
-                        <EventLine label="Assist." entries={assistEntries} color="text-primary" />
+                        <GoalAssistList entries={goalAssistEntries} />
+                        <EventLine label="Assist. avulsas" entries={standaloneAssistEntries} color="text-primary" />
                         <EventLine label="Amarelo" entries={yellows} color="text-warning" />
                         <EventLine label="Vermelho" entries={reds} color="text-destructive" />
-                        {starterEntries.length === 0 && reserveEntries.length === 0 && goalEntries.length === 0 && assistEntries.length === 0 && yellows.length === 0 && reds.length === 0 && (
+                        {starterEntries.length === 0 && reserveEntries.length === 0 && goalAssistEntries.length === 0 && standaloneAssistEntries.length === 0 && yellows.length === 0 && reds.length === 0 && (
                           <p className="text-xs text-muted-foreground">Nenhum evento registrado.</p>
                         )}
                       </div>
