@@ -173,6 +173,15 @@ export function OpponentCombobox({
       if (containerRef.current?.contains(document.activeElement)) return
 
       const currentQuery = queryRef.current
+      const committed = committedRef.current
+      if (committed && normalizeOpponentSearch(committed.name) === normalizeOpponentSearch(currentQuery)) {
+        queryRef.current = committed.name
+        setQuery(committed.name)
+        if (valueRef.current !== committed.id) onValueChange(committed.id)
+        setOpen(false)
+        return
+      }
+
       const match = findExactOpponent(opponents, currentQuery)
       if (match) {
         committedRef.current = match
@@ -255,7 +264,8 @@ export function OpponentCombobox({
         aria-autocomplete="list"
         aria-activedescendant={open ? activeOptionId : undefined}
         value={query}
-        disabled={disabled || isCreating}
+        disabled={disabled}
+        readOnly={isCreating}
         placeholder="Buscar adversário"
         autoComplete="off"
         autoCorrect="off"
