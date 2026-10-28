@@ -5,7 +5,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { OpponentCombobox } from '@/components/opponent-combobox'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
@@ -37,9 +37,6 @@ export function MatchForm({ opponents: initialOpponents, match, ownerId, onClose
   const [goalsFor, setGoalsFor] = useState(match?.goals_for?.toString() || '0')
   const [goalsAgainst, setGoalsAgainst] = useState(match?.goals_against?.toString() || '0')
   const [isLoading, setIsLoading] = useState(false)
-  const [showNewOpponent, setShowNewOpponent] = useState(false)
-  const [newOpponentName, setNewOpponentName] = useState('')
-  const [isCreatingOpponent, setIsCreatingOpponent] = useState(false)
   const router = useRouter()
   const isEditing = !!match
 
@@ -52,50 +49,6 @@ export function MatchForm({ opponents: initialOpponents, match, ownerId, onClose
       return await Promise.race([promise, timeoutPromise])
     } finally {
       clearTimeout(timeoutId!)
-    }
-  }
-
-  const handleCreateOpponent = async () => {
-    if (!newOpponentName.trim()) return
-    setIsCreatingOpponent(true)
-    try {
-      const supabase = createClient()
-
-      const { data, error } = await withTimeout(
-        supabase
-          .from('opponent_teams')
-          .insert({ name: newOpponentName.trim(), user_id: ownerId })
-          .select()
-          .single()
-      )
-
-      if (error || !data) {
-        toast.error(error?.message || 'Erro ao criar adversário')
-        return
-      }
-
-      const updated = [...opponents, data].sort((a, b) => a.name.localeCompare(b.name))
-      setOpponents(updated)
-      setOpponentId(data.id)
-      setShowNewOpponent(false)
-      setNewOpponentName('')
-      onOpponentsChange?.(updated)
-      toast.success('Adversário adicionado')
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Erro inesperado ao criar adversário'
-      toast.error(message)
-    } finally {
-      setIsCreatingOpponent(false)
-    }
-  }
-
-  const handleOpponentChange = (value: string) => {
-    if (value === '__new__') {
-      setShowNewOpponent(true)
-      setOpponentId('')
-    } else {
-      setOpponentId(value)
-      setShowNewOpponent(false)
     }
   }
 
@@ -148,52 +101,18 @@ export function MatchForm({ opponents: initialOpponents, match, ownerId, onClose
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <div className="grid gap-2">
-        <Label className="text-muted-foreground">Adversário</Label>
-        {!showNewOpponent ? (
-          <Select value={opponentId} onValueChange={handleOpponentChange} required>
-            <SelectTrigger className="h-11 bg-secondary border-border">
-              <SelectValue placeholder="Selecione o adversário" />
-            </SelectTrigger>
-            <SelectContent className="bg-card border-border">
-              {opponents.map(o => (
-                <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
-              ))}
-              <SelectItem value="__new__" className="text-primary font-medium">
-                + Novo adversário
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        ) : (
-          <div className="flex gap-2">
-            <Input
-              value={newOpponentName}
-              onChange={(e) => setNewOpponentName(e.target.value)}
-              placeholder="Nome do adversário"
-              className="h-11 bg-secondary border-border flex-1"
-              autoFocus
-            />
-            <Button
-              type="button"
-              size="sm"
-              className="h-11 px-3 bg-primary text-primary-foreground hover:bg-primary/90"
-              onClick={handleCreateOpponent}
-              disabled={isCreatingOpponent || !newOpponentName.trim()}
-            >
-              {isCreatingOpponent ? '...' : 'Criar'}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-11 px-3 border-border text-muted-foreground bg-transparent"
-              onClick={() => { setShowNewOpponent(false); setNewOpponentName('') }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M18 6L6 18M6 6l12 12" />
-              </svg>
-            </Button>
-          </div>
-        )}
+        <Label htmlFor="match-opponent" className="text-muted-foreground">Adversário</Label>
+        <OpponentCombobox
+          id="match-opponent"
+          opponents={opponents}
+          value={opponentId}
+          onValueChange={setOpponentId}
+          onOpponentsChange={(updated) => {
+            setOpponents(updated)
+            onOpponentsChange?.(updated)
+          }}
+          ownerId={ownerId}
+        />
       </div>
       <div className="grid gap-2">
         <Label htmlFor="match-date" className="text-muted-foreground">Data</Label>
