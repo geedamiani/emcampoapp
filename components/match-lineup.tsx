@@ -2,7 +2,7 @@
  * MATCH LINEUP COMPONENT
  *
  * Opened from the Partidas page when you click "Editar escalação".
- * Lets you: add/remove players, set starter/reserve, add goals (scorer + assistant), add cards.
+ * Lets you: add/remove players, set starter/reserve, add goals (scorer + assistant).
  * On save, calls the saveLineup server action (app/dashboard/partidas/actions.ts).
  */
 'use client'
@@ -48,8 +48,6 @@ interface PlayerLineup {
   playerId: string
   name: string
   starter: boolean
-  yellowCards: number
-  redCards: number
 }
 
 interface MatchLineupProps {
@@ -60,39 +58,6 @@ interface MatchLineupProps {
   existingEvents: ExistingEvent[]
   onClose: () => void
   onRefresh?: () => void
-}
-
-function Counter({ value, onChange, label, color = 'foreground', max = 20 }: { value: number; onChange: (v: number) => void; label: string; color?: string; max?: number }) {
-  const colorMap: Record<string, string> = {
-    primary: 'text-primary',
-    warning: 'text-warning',
-    destructive: 'text-destructive',
-    foreground: 'text-foreground',
-  }
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <div className="flex items-center gap-1.5">
-        <button
-          type="button"
-          className="flex h-7 w-7 items-center justify-center rounded-md bg-secondary text-muted-foreground active:bg-accent disabled:opacity-30"
-          onClick={() => onChange(Math.max(0, value - 1))}
-          disabled={value === 0}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14" /></svg>
-        </button>
-        <span className={cn('w-5 text-center text-sm font-bold tabular-nums', colorMap[color])}>{value}</span>
-        <button
-          type="button"
-          className="flex h-7 w-7 items-center justify-center rounded-md bg-secondary text-muted-foreground active:bg-accent disabled:opacity-30"
-          onClick={() => onChange(Math.min(max, value + 1))}
-          disabled={value >= max}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14" /></svg>
-        </button>
-      </div>
-    </div>
-  )
 }
 
 export function MatchLineup({ matchId, players, ownerId, existingMatchPlayers, existingEvents, onClose, onRefresh }: MatchLineupProps) {
@@ -116,16 +81,13 @@ export function MatchLineup({ matchId, players, ownerId, existingMatchPlayers, e
   const buildInitialLineup = useCallback((): PlayerLineup[] => {
     return existingMatchPlayers.map(mp => {
       const player = players.find(p => p.id === mp.player_id)
-      const playerEvents = existingEvents.filter(e => e.player_id === mp.player_id)
       return {
         playerId: mp.player_id,
         name: player?.name || 'Desconhecido',
         starter: mp.starter,
-        yellowCards: playerEvents.filter(e => e.event_type === 'yellow_card').length,
-        redCards: playerEvents.filter(e => e.event_type === 'red_card').length,
       }
     })
-  }, [players, existingMatchPlayers, existingEvents])
+  }, [players, existingMatchPlayers])
 
   const buildInitialGoals = useCallback((): GoalEntry[] => {
     const goalEvents = existingEvents.filter(e => e.event_type === 'goal')
@@ -166,8 +128,6 @@ export function MatchLineup({ matchId, players, ownerId, existingMatchPlayers, e
           playerId: player.id,
           name: player.name,
           starter: true,
-          yellowCards: 0,
-          redCards: 0,
         })
       }
     }
@@ -183,10 +143,6 @@ export function MatchLineup({ matchId, players, ownerId, existingMatchPlayers, e
 
   const toggleStarter = (playerId: string) => {
     setLineup(prev => prev.map(l => l.playerId === playerId ? { ...l, starter: !l.starter } : l))
-  }
-
-  const updateStat = (playerId: string, field: 'yellowCards' | 'redCards', value: number) => {
-    setLineup(prev => prev.map(l => l.playerId === playerId ? { ...l, [field]: value } : l))
   }
 
   const addGoal = () => {
@@ -209,8 +165,6 @@ export function MatchLineup({ matchId, players, ownerId, existingMatchPlayers, e
       const lineupPayload = lineup.map(l => ({
         playerId: l.playerId,
         starter: l.starter,
-        yellowCards: l.yellowCards,
-        redCards: l.redCards,
       }))
       const goalPayload = goalEntries.map(g => ({
         scorerId: g.scorerId,
@@ -391,7 +345,7 @@ export function MatchLineup({ matchId, players, ownerId, existingMatchPlayers, e
         </div>
       )}
 
-      {/* Player cards (starter + cards only) */}
+      {/* Escalados */}
       <div className="flex flex-col gap-2 max-h-[45svh] overflow-y-auto -mx-1 px-1">
         {lineup.length === 0 && !showPicker && (
           <div className="flex flex-col items-center justify-center py-8">
@@ -406,7 +360,7 @@ export function MatchLineup({ matchId, players, ownerId, existingMatchPlayers, e
 
         {lineup.map((l) => (
           <div key={l.playerId} className="rounded-xl border border-primary/20 bg-primary/5 p-3">
-            <div className="flex items-center gap-2 mb-2.5">
+            <div className="flex items-center gap-2">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-xs font-bold text-primary">
                 {l.name.slice(0, 2).toUpperCase()}
               </div>
@@ -428,10 +382,6 @@ export function MatchLineup({ matchId, players, ownerId, existingMatchPlayers, e
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
               </button>
-            </div>
-            <div className="flex flex-col gap-2">
-              <Counter label="Cartão amarelo" value={l.yellowCards} onChange={(v) => updateStat(l.playerId, 'yellowCards', v)} color="warning" max={2} />
-              <Counter label="Cartão vermelho" value={l.redCards} onChange={(v) => updateStat(l.playerId, 'redCards', v)} color="destructive" max={1} />
             </div>
           </div>
         ))}

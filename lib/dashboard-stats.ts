@@ -40,15 +40,11 @@ export interface DashboardStats {
   avgGolsFor: number
   avgGolsAgainst: number
   cleanSheets: number
-  totalYellows: number
-  totalReds: number
   form: { result: 'V' | 'E' | 'D'; opponent: string; score: string; date: string }[]
   goalsTimeline: { label: string; date: string; golsFor: number; golsAgainst: number; opponent: string }[]
   topGoalScorers: PlayerRateStat[]
   topAssistProviders: PlayerRateStat[]
   topAppearances: { name: string; matches: number; starterRate: number }[]
-  topYellows: { name: string; value: number }[]
-  topReds: { name: string; value: number }[]
   topDuos: { name: string; value: number }[]
   recentMatches: {
     id: string
@@ -136,8 +132,6 @@ export function buildDashboardStats(input: {
 
   const goalsByPlayer: Record<string, { name: string; count: number }> = {}
   const assistsByPlayer: Record<string, { name: string; count: number }> = {}
-  const yellowsByPlayer: Record<string, { name: string; count: number }> = {}
-  const redsByPlayer: Record<string, { name: string; count: number }> = {}
   const duosByKey: Record<string, { name: string; count: number }> = {}
 
   for (const ev of eventsInSemester) {
@@ -161,12 +155,6 @@ export function buildDashboardStats(input: {
     } else if (ev.event_type === 'assist') {
       if (!assistsByPlayer[key]) assistsByPlayer[key] = { name: pName, count: 0 }
       assistsByPlayer[key].count++
-    } else if (ev.event_type === 'yellow_card') {
-      if (!yellowsByPlayer[key]) yellowsByPlayer[key] = { name: pName, count: 0 }
-      yellowsByPlayer[key].count++
-    } else if (ev.event_type === 'red_card') {
-      if (!redsByPlayer[key]) redsByPlayer[key] = { name: pName, count: 0 }
-      redsByPlayer[key].count++
     }
   }
 
@@ -180,12 +168,7 @@ export function buildDashboardStats(input: {
 
   const topGoalScorers = toPlayerRateStats(goalsByPlayer, appearances)
   const topAssistProviders = toPlayerRateStats(assistsByPlayer, appearances)
-  const topYellows = toRanking(yellowsByPlayer)
-  const topReds = toRanking(redsByPlayer)
   const topDuos = toRanking(duosByKey)
-
-  const totalYellows = topYellows.reduce((s, p) => s + p.value, 0)
-  const totalReds = topReds.reduce((s, p) => s + p.value, 0)
 
   const topAppearances = Object.values(appearances)
     .map(a => ({
@@ -232,15 +215,11 @@ export function buildDashboardStats(input: {
     avgGolsFor,
     avgGolsAgainst,
     cleanSheets,
-    totalYellows,
-    totalReds,
     form,
     goalsTimeline,
     topGoalScorers,
     topAssistProviders,
     topAppearances,
-    topYellows,
-    topReds,
     topDuos,
     recentMatches,
   }

@@ -11,7 +11,7 @@ const _inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   title: 'Meu Time - Estatísticas de Futebol',
-  description: 'Acompanhe as estatísticas do seu time de futebol amador: gols, assistências, cartões e muito mais.',
+  description: 'Acompanhe as estatísticas do seu time de futebol amador: gols, assistências e muito mais.',
 }
 
 export const viewport: Viewport = {

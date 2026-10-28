@@ -291,43 +291,19 @@ export function DashboardOverview({ stats, readOnly = false }: { stats: Dashboar
               )}
           </SectionCard>
 
-          {/* Duos + cards (conditional) */}
-          {(stats.topDuos.length > 0 || stats.totalYellows + stats.totalReds > 0) && (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {stats.topDuos.length > 0 && (
-                <SectionCard title="Duplas Produtivas" description="Assistência → gol">
-                  <div className="flex flex-col gap-2">
-                    {stats.topDuos.slice(0, 4).map((d, i) => (
-                      <div key={d.name} className="flex items-center justify-between gap-2">
-                        <span className="truncate text-sm text-foreground">
-                          <span className="font-medium text-muted-foreground">{i + 1}.</span> {d.name}
-                        </span>
-                        <span className="shrink-0 text-sm font-bold text-primary">{d.value}×</span>
-                      </div>
-                    ))}
+          {stats.topDuos.length > 0 && (
+            <SectionCard title="Duplas Produtivas" description="Assistência → gol">
+              <div className="flex flex-col gap-2">
+                {stats.topDuos.slice(0, 4).map((d, i) => (
+                  <div key={d.name} className="flex items-center justify-between gap-2">
+                    <span className="truncate text-sm text-foreground">
+                      <span className="font-medium text-muted-foreground">{i + 1}.</span> {d.name}
+                    </span>
+                    <span className="shrink-0 text-sm font-bold text-primary">{d.value}×</span>
                   </div>
-                </SectionCard>
-              )}
-
-              {(stats.totalYellows + stats.totalReds > 0) && (
-                <SectionCard title="Cartões" description={`${stats.totalYellows} amarelos · ${stats.totalReds} vermelhos`}>
-                  <div className="flex flex-col gap-2">
-                    {stats.topYellows.slice(0, 3).map(p => (
-                      <div key={p.name} className="flex items-center justify-between">
-                        <span className="truncate text-sm text-foreground">{p.name}</span>
-                        <span className="text-sm font-bold text-warning">{p.value} amarelo{p.value !== 1 ? 's' : ''}</span>
-                      </div>
-                    ))}
-                    {stats.topReds.slice(0, 2).map(p => (
-                      <div key={p.name} className="flex items-center justify-between">
-                        <span className="truncate text-sm text-foreground">{p.name}</span>
-                        <span className="text-sm font-bold text-destructive">{p.value} vermelho{p.value !== 1 ? 's' : ''}</span>
-                      </div>
-                    ))}
-                  </div>
-                </SectionCard>
-              )}
-            </div>
+                ))}
+              </div>
+            </SectionCard>
           )}
 
           <RecentMatches matches={stats.recentMatches} />

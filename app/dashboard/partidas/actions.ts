@@ -1,14 +1,15 @@
 /**
  * SAVE LINEUP - Server Action
  *
- * Called when the user saves lineup + goals + cards for a match.
+ * Called when the user saves lineup + goals for a match.
  * Runs on the server so we can revalidate the Partidas page cache.
  *
  * Steps:
  * 1. Verify the user is allowed to edit this account's data.
- * 2. Delete existing match_players and match_events for this match.
+ * 2. Replace match_players and goal/assist events for this match.
+ *    Existing yellow_card and red_card rows are left in the database.
  * 3. Insert new match_players (who played, starter or not).
- * 4. Insert new match_events (goals with optional assistant, cards).
+ * 4. Insert new match_events (goals with optional assistant).
  * 5. Revalidate the Partidas page so it shows fresh data.
  */
 'use server'
@@ -20,8 +21,6 @@ import { getEffectiveOwnerId } from '@/lib/get-effective-owner'
 type LineupRow = {
   playerId: string
   starter: boolean
-  yellowCards: number
-  redCards: number
 }
 
 type GoalEntry = {
@@ -46,7 +45,13 @@ export async function saveLineup(
   const { error: delMpErr } = await supabase.from('match_players').delete().eq('match_id', matchId)
   if (delMpErr) return { error: delMpErr.message }
 
-  const { error: delEvErr } = await supabase.from('match_events').delete().eq('match_id', matchId)
+  // Replace only goals and assists. Card rows stay in match_events so historical
+  // yellow_card / red_card data is not deleted when a lineup is saved.
+  const { error: delEvErr } = await supabase
+    .from('match_events')
+    .delete()
+    .eq('match_id', matchId)
+    .in('event_type', ['goal', 'assist'])
   if (delEvErr) return { error: delEvErr.message }
 
   // Step 3: Insert lineup (try was_starter first, fall back to starter)
@@ -72,7 +77,7 @@ export async function saveLineup(
     }
   }
 
-  // Step 4: Build events (goals + cards) and insert
+  // Step 4: Build goal events and insert
   type EventRow = {
     match_id: string
     player_id: string
@@ -93,15 +98,6 @@ export async function saveLineup(
       user_id: ownerId,
       assistant_id: g.assistantId || null,
     })
-  }
-
-  for (const l of lineup) {
-    for (let i = 0; i < l.yellowCards; i++) {
-      events.push({ match_id: matchId, player_id: l.playerId, event_type: 'yellow_card', minute: null, user_id: ownerId })
-    }
-    for (let i = 0; i < l.redCards; i++) {
-      events.push({ match_id: matchId, player_id: l.playerId, event_type: 'red_card', minute: null, user_id: ownerId })
-    }
   }
 
   if (events.length > 0) {
