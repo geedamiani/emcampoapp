@@ -2,7 +2,7 @@
  * MATCHES LIST COMPONENT
  *
  * Renders the list of matches on the Partidas page.
- * Each match card shows: opponent, score, date, lineup count, goals with assists, cards.
+ * Each match shows: opponent, score, date, lineup count, and goals with assists.
  * Expandable cards. Buttons: new match, edit match, lineup, delete.
  */
 'use client'
@@ -73,16 +73,6 @@ function getResultInfo(gf: number, ga: number) {
 function formatDate(dateStr: string) {
   const date = new Date(dateStr + 'T12:00:00')
   return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
-}
-
-function groupEventsByPlayer(events: MatchEvent[], type: string) {
-  const map: Record<string, { name: string; count: number }> = {}
-  for (const e of events.filter(ev => ev.event_type === type)) {
-    const name = e.players?.name || 'Desconhecido'
-    if (!map[e.player_id]) map[e.player_id] = { name, count: 0 }
-    map[e.player_id].count++
-  }
-  return Object.values(map)
 }
 
 interface GoalAssistEntry {
@@ -276,8 +266,6 @@ export function MatchesList({
 
             const goalAssistEntries = getGoalAssistEntries(match.match_events, players)
             const standaloneAssistEntries = getStandaloneAssistEntries(match.match_events, players)
-            const yellows = groupEventsByPlayer(match.match_events, 'yellow_card')
-            const reds = groupEventsByPlayer(match.match_events, 'red_card')
 
             return (
               <div key={match.id} className="rounded-xl border border-border bg-card overflow-hidden">
@@ -319,9 +307,7 @@ export function MatchesList({
                         <EventLine label="Reservas" entries={reserveEntries} color="text-muted-foreground" />
                         <GoalAssistList entries={goalAssistEntries} />
                         <EventLine label="Assist. avulsas" entries={standaloneAssistEntries} color="text-primary" />
-                        <EventLine label="Amarelo" entries={yellows} color="text-warning" />
-                        <EventLine label="Vermelho" entries={reds} color="text-destructive" />
-                        {starterEntries.length === 0 && reserveEntries.length === 0 && goalAssistEntries.length === 0 && standaloneAssistEntries.length === 0 && yellows.length === 0 && reds.length === 0 && (
+                        {starterEntries.length === 0 && reserveEntries.length === 0 && goalAssistEntries.length === 0 && standaloneAssistEntries.length === 0 && (
                           <p className="text-xs text-muted-foreground">Nenhum evento registrado.</p>
                         )}
                       </div>

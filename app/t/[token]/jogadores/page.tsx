@@ -64,8 +64,6 @@ export default async function PublicJogadoresPage({
       assists:
         (events || []).filter(ev => ev.event_type === 'goal' && ev.assistant_id === p.id && matchIdsInSemester.has(ev.match_id)).length +
         playerEvents.filter(ev => ev.event_type === 'assist').length,
-      yellow_cards: playerEvents.filter(ev => ev.event_type === 'yellow_card').length,
-      red_cards: playerEvents.filter(ev => ev.event_type === 'red_card').length,
     }
   })
 

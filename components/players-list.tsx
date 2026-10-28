@@ -37,8 +37,6 @@ interface PlayerStats {
   total_matches: number
   goals: number
   assists: number
-  yellow_cards: number
-  red_cards: number
 }
 
 type SortKey = 'name' | 'matches_played' | 'goals' | 'assists'
