@@ -78,11 +78,19 @@ export default async function MatchesPage({ searchParams }: { searchParams: Prom
   }
 
   const playersByMatch = new Map<string, typeof matchPlayers>()
+  const appearanceCounts = new Map<string, number>()
   for (const p of matchPlayers || []) {
     const list = playersByMatch.get(p.match_id) || []
     list.push(p)
     playersByMatch.set(p.match_id, list)
+    appearanceCounts.set(p.player_id, (appearanceCounts.get(p.player_id) ?? 0) + 1)
   }
+
+  // All-time appearances, not the semester filter, so an empty search lists regulars first.
+  const playersWithAppearances = (players || []).map(player => ({
+    ...player,
+    appearances: appearanceCounts.get(player.id) ?? 0,
+  }))
 
   const matchesWithRelations = matches.map((m) => ({
     ...m,
@@ -95,7 +103,7 @@ export default async function MatchesPage({ searchParams }: { searchParams: Prom
       <MatchesList
         matches={matchesWithRelations}
         opponents={opponents || []}
-        players={players || []}
+        players={playersWithAppearances}
         ownerId={ownerId}
         autoOpen={params.action === 'new'}
       />

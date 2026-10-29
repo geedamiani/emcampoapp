@@ -9,16 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
-
-const positions = [
-  'Goleiro',
-  'Zagueiro',
-  'Lateral Direito',
-  'Lateral Esquerdo',
-  'Volante',
-  'Meia',
-  'Atacante',
-]
+import { PLAYER_POSITIONS } from '@/lib/player-positions'
 
 interface PlayerFormProps {
   player?: {
@@ -110,7 +101,7 @@ export function PlayerForm({ player, ownerId, onClose, onRefresh }: PlayerFormPr
             <SelectValue placeholder="Selecione a posição" />
           </SelectTrigger>
           <SelectContent className="bg-card border-border">
-            {positions.map(p => (
+            {PLAYER_POSITIONS.map(p => (
               <SelectItem key={p} value={p}>{p}</SelectItem>
             ))}
           </SelectContent>
