@@ -37,6 +37,7 @@ interface Player {
   id: string
   name: string
   position?: string | null
+  appearances?: number
 }
 
 interface MatchPlayer {
@@ -199,6 +200,7 @@ export function MatchesList({
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [currentOpponents, setCurrentOpponents] = useState(opponents)
+  const [currentPlayers, setCurrentPlayers] = useState(players)
   const [isPending, startTransition] = useTransition()
   const router = useRouter()
 
@@ -208,6 +210,16 @@ export function MatchesList({
       setSheetOpen(true)
     }
   }, [autoOpen])
+
+  useEffect(() => {
+    setCurrentPlayers(prev => {
+      const byId = new Map(players.map(player => [player.id, player]))
+      for (const player of prev) {
+        if (!byId.has(player.id)) byId.set(player.id, player)
+      }
+      return Array.from(byId.values())
+    })
+  }, [players])
 
   const refreshData = () => {
     startTransition(() => {
@@ -261,11 +273,11 @@ export function MatchesList({
             const result = getResultInfo(match.goals_for, match.goals_against)
             const isExpanded = expandedId === match.id
             const playerCount = match.match_players?.length || 0
-            const starterEntries = getLineupEntries(match.match_players || [], players, true)
-            const reserveEntries = getLineupEntries(match.match_players || [], players, false)
+            const starterEntries = getLineupEntries(match.match_players || [], currentPlayers, true)
+            const reserveEntries = getLineupEntries(match.match_players || [], currentPlayers, false)
 
-            const goalAssistEntries = getGoalAssistEntries(match.match_events, players)
-            const standaloneAssistEntries = getStandaloneAssistEntries(match.match_events, players)
+            const goalAssistEntries = getGoalAssistEntries(match.match_events, currentPlayers)
+            const standaloneAssistEntries = getStandaloneAssistEntries(match.match_events, currentPlayers)
 
             return (
               <div key={match.id} className="rounded-xl border border-border bg-card overflow-hidden">
@@ -388,7 +400,7 @@ export function MatchesList({
           {lineupMatch && (
             <MatchLineup
               matchId={lineupMatch.id}
-              players={players}
+              players={currentPlayers}
               ownerId={ownerId}
               existingMatchPlayers={(lineupMatch.match_players || []).map(mp => ({
                 player_id: mp.player_id,
@@ -396,6 +408,7 @@ export function MatchesList({
               }))}
               existingEvents={lineupMatch.match_events || []}
               onClose={() => setLineupSheetOpen(false)}
+              onPlayersChange={setCurrentPlayers}
               onRefresh={refreshData}
             />
           )}
