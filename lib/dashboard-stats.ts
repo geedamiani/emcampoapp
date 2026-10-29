@@ -23,8 +23,6 @@ export type PlayerRow = { id: string; name: string }
 export type MatchPlayerRow = {
   player_id: string
   match_id: string
-  was_starter?: boolean
-  starter?: boolean
 }
 
 export interface DashboardStats {
@@ -41,11 +39,8 @@ export interface DashboardStats {
   avgGolsAgainst: number
   cleanSheets: number
   form: { result: 'V' | 'E' | 'D'; opponent: string; score: string; date: string }[]
-  goalsTimeline: { label: string; date: string; golsFor: number; golsAgainst: number; opponent: string }[]
   topGoalScorers: PlayerRateStat[]
   topAssistProviders: PlayerRateStat[]
-  topAppearances: { name: string; matches: number; starterRate: number }[]
-  topDuos: { name: string; value: number }[]
   recentMatches: {
     id: string
     opponent_name: string
@@ -78,12 +73,6 @@ function toPlayerRateStats(
     })
     .sort((a, b) => b.value - a.value || b.perMatch - a.perMatch)
     .slice(0, 10)
-}
-
-function toRanking(map: Record<string, { name: string; count: number }>) {
-  return Object.values(map)
-    .sort((a, b) => b.count - a.count)
-    .map(p => ({ name: p.name, value: p.count }))
 }
 
 function formatShortDate(dateStr: string) {
@@ -128,11 +117,8 @@ export function buildDashboardStats(input: {
   const avgGolsAgainst = totalMatches > 0 ? Math.round((golsContra / totalMatches) * 10) / 10 : 0
   const cleanSheets = matchesInSemester.filter(m => m.goals_against === 0).length
 
-  const matchesChronological = [...matchesInSemester].reverse()
-
   const goalsByPlayer: Record<string, { name: string; count: number }> = {}
   const assistsByPlayer: Record<string, { name: string; count: number }> = {}
-  const duosByKey: Record<string, { name: string; count: number }> = {}
 
   for (const ev of eventsInSemester) {
     const pName = ev.players?.name || playerNameById[ev.player_id] || 'Desconhecido'
@@ -146,11 +132,6 @@ export function buildDashboardStats(input: {
         const aName = playerNameById[ev.assistant_id] || 'Desconhecido'
         if (!assistsByPlayer[ev.assistant_id]) assistsByPlayer[ev.assistant_id] = { name: aName, count: 0 }
         assistsByPlayer[ev.assistant_id].count++
-
-        const duoKey = `${ev.assistant_id}:${ev.player_id}`
-        const duoName = `${aName} → ${pName}`
-        if (!duosByKey[duoKey]) duosByKey[duoKey] = { name: duoName, count: 0 }
-        duosByKey[duoKey].count++
       }
     } else if (ev.event_type === 'assist') {
       if (!assistsByPlayer[key]) assistsByPlayer[key] = { name: pName, count: 0 }
@@ -158,40 +139,20 @@ export function buildDashboardStats(input: {
     }
   }
 
-  const appearances: Record<string, { name: string; matches: number; starters: number }> = {}
+  const appearances: Record<string, { matches: number }> = {}
   for (const mp of matchPlayersInSemester) {
-    const name = playerNameById[mp.player_id] || 'Desconhecido'
-    if (!appearances[mp.player_id]) appearances[mp.player_id] = { name, matches: 0, starters: 0 }
+    if (!appearances[mp.player_id]) appearances[mp.player_id] = { matches: 0 }
     appearances[mp.player_id].matches++
-    if (mp.was_starter ?? mp.starter) appearances[mp.player_id].starters++
   }
 
   const topGoalScorers = toPlayerRateStats(goalsByPlayer, appearances)
   const topAssistProviders = toPlayerRateStats(assistsByPlayer, appearances)
-  const topDuos = toRanking(duosByKey)
-
-  const topAppearances = Object.values(appearances)
-    .map(a => ({
-      name: a.name,
-      matches: a.matches,
-      starterRate: a.matches > 0 ? Math.round((a.starters / a.matches) * 100) : 0,
-    }))
-    .sort((a, b) => b.matches - a.matches)
-    .slice(0, 5)
 
   const form = matchesInSemester.slice(0, 8).map(m => ({
     result: getMatchResult(m.goals_for, m.goals_against),
     opponent: m.opponent_teams?.name || 'Desconhecido',
     score: `${m.goals_for}-${m.goals_against}`,
     date: formatShortDate(m.match_date),
-  }))
-
-  const goalsTimeline = matchesChronological.map(m => ({
-    label: m.opponent_teams?.name || 'Desconhecido',
-    date: formatShortDate(m.match_date),
-    golsFor: m.goals_for,
-    golsAgainst: m.goals_against,
-    opponent: m.opponent_teams?.name || 'Desconhecido',
   }))
 
   const recentMatches = matchesInSemester.slice(0, 5).map(m => ({
@@ -216,11 +177,8 @@ export function buildDashboardStats(input: {
     avgGolsAgainst,
     cleanSheets,
     form,
-    goalsTimeline,
     topGoalScorers,
     topAssistProviders,
-    topAppearances,
-    topDuos,
     recentMatches,
   }
 }

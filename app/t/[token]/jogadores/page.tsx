@@ -36,7 +36,7 @@ export default async function PublicJogadoresPage({
     { data: events },
     { data: matches },
   ] = await Promise.all([
-    admin.from('players').select('*').eq('user_id', ownerId).order('name'),
+    admin.from('players').select('id, name, position').eq('user_id', ownerId).order('name'),
     admin.from('match_players').select('*').eq('user_id', ownerId),
     admin.from('match_events').select('player_id, event_type, assistant_id').eq('user_id', ownerId),
     admin.from('matches').select('id, match_date').eq('user_id', ownerId).order('match_date', { ascending: false }),
@@ -56,7 +56,6 @@ export default async function PublicJogadoresPage({
       id: p.id,
       name: p.name,
       position: p.position,
-      whatsapp: p.whatsapp,
       matches_played: playerMatches.length,
       matches_starter: playerMatches.filter(mp => (mp as { was_starter?: boolean; starter?: boolean }).was_starter ?? (mp as { was_starter?: boolean; starter?: boolean }).starter).length,
       total_matches: totalMatches,

@@ -25,7 +25,7 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
     { data: events },
     { data: matches },
   ] = await Promise.all([
-    supabase.from('players').select('*').eq('user_id', ownerId).order('name'),
+    supabase.from('players').select('id, name, position').eq('user_id', ownerId).order('name'),
     supabase.from('match_players').select('*').eq('user_id', ownerId),
     supabase.from('match_events').select('player_id, event_type, assistant_id, match_id').eq('user_id', ownerId),
     supabase.from('matches').select('id, match_date').eq('user_id', ownerId).order('match_date', { ascending: false }),
@@ -46,7 +46,6 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
       id: p.id,
       name: p.name,
       position: p.position,
-      whatsapp: p.whatsapp,
       matches_played: playerMatches.length,
       matches_starter: playerMatches.filter(mp => (mp as { was_starter?: boolean; starter?: boolean }).was_starter ?? (mp as { was_starter?: boolean; starter?: boolean }).starter).length,
       total_matches: totalMatches,

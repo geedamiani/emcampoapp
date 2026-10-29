@@ -41,7 +41,7 @@ export default async function PublicTeamPage({
     admin.from('matches').select('*, opponent_teams(name)').eq('user_id', ownerId).order('match_date', { ascending: false }),
     admin.from('match_events').select('*, players!match_events_player_id_fkey(name)').eq('user_id', ownerId),
     admin.from('players').select('id, name').eq('user_id', ownerId),
-    admin.from('match_players').select('*').eq('user_id', ownerId),
+    admin.from('match_players').select('player_id, match_id').eq('user_id', ownerId),
   ])
 
   const matchDates = (matches || []).map(m => m.match_date).filter(Boolean)
