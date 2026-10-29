@@ -25,7 +25,6 @@ interface PlayerFormProps {
     id: string
     name: string
     position: string | null
-    whatsapp: string | null
   }
   ownerId: string
   onClose: () => void
@@ -35,7 +34,6 @@ interface PlayerFormProps {
 export function PlayerForm({ player, ownerId, onClose, onRefresh }: PlayerFormProps) {
   const [name, setName] = useState(player?.name || '')
   const [position, setPosition] = useState(player?.position || '')
-  const [whatsapp, setWhatsapp] = useState(player?.whatsapp || '')
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
   const isEditing = !!player
@@ -62,7 +60,6 @@ export function PlayerForm({ player, ownerId, onClose, onRefresh }: PlayerFormPr
       const payload = {
         name,
         position: position || null,
-        whatsapp: whatsapp || null,
         user_id: ownerId,
       }
 
@@ -118,19 +115,6 @@ export function PlayerForm({ player, ownerId, onClose, onRefresh }: PlayerFormPr
             ))}
           </SelectContent>
         </Select>
-      </div>
-      <div className="grid gap-2">
-        <Label htmlFor="whatsapp" className="text-muted-foreground">
-          WhatsApp <span className="text-xs text-muted-foreground/60">(opcional)</span>
-        </Label>
-        <Input
-          id="whatsapp"
-          type="tel"
-          value={whatsapp}
-          onChange={(e) => setWhatsapp(e.target.value)}
-          className="h-11 bg-secondary border-border"
-          placeholder="(11) 99999-9999"
-        />
       </div>
       <div className="flex gap-3 pt-2">
         <Button type="button" variant="outline" className="flex-1 h-11 border-border text-muted-foreground bg-transparent" onClick={onClose}>

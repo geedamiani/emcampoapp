@@ -1,21 +1,10 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts'
 import { StatCard } from '@/components/stat-card'
 import { RecentMatches } from '@/components/recent-matches'
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from '@/components/ui/chart'
 import { cn } from '@/lib/utils'
 import type { DashboardStats, PlayerRateStat } from '@/lib/dashboard-stats'
-
-const timelineChartConfig = {
-  golsFor: { label: 'Marcados', color: 'hsl(var(--chart-1))' },
-  golsAgainst: { label: 'Sofridos', color: 'hsl(var(--chart-3))' },
-}
 
 const formColors = {
   V: 'bg-primary text-primary-foreground',
@@ -128,14 +117,6 @@ function AttackRankingList({
   )
 }
 
-function EmptyChart({ message }: { message: string }) {
-  return (
-    <div className="flex h-[160px] items-center justify-center rounded-lg bg-muted/30">
-      <p className="text-xs text-muted-foreground">{message}</p>
-    </div>
-  )
-}
-
 export function DashboardOverview({ stats, readOnly = false }: { stats: DashboardStats; readOnly?: boolean }) {
   const hasMatches = stats.totalMatches > 0
 
@@ -208,41 +189,7 @@ export function DashboardOverview({ stats, readOnly = false }: { stats: Dashboar
             <StatCard label="Clean sheets" value={stats.cleanSheets} accent="muted" />
           </div>
 
-          <SectionCard title="Gols por Partida" description="Evolução ao longo do período">
-            {stats.goalsTimeline.length === 0 ? (
-              <EmptyChart message="Sem partidas" />
-            ) : (
-              <ChartContainer config={timelineChartConfig} className="h-[200px] w-full">
-                <LineChart data={stats.goalsTimeline} margin={{ top: 8, right: 8, left: -20, bottom: 4 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis
-                    dataKey="label"
-                    tickLine={false}
-                    axisLine={false}
-                    tick={{ fontSize: 9 }}
-                    interval={0}
-                    angle={-35}
-                    textAnchor="end"
-                    height={56}
-                    tickFormatter={(value: string) => (value.length > 12 ? `${value.slice(0, 11)}…` : value)}
-                  />
-                  <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10 }} allowDecimals={false} />
-                  <ChartTooltip
-                    content={
-                      <ChartTooltipContent
-                        labelFormatter={(_, payload) => {
-                          const item = payload?.[0]?.payload
-                          return item ? `${item.label} · ${item.date}` : ''
-                        }}
-                      />
-                    }
-                  />
-                  <Line type="monotone" dataKey="golsFor" stroke="var(--color-golsFor)" strokeWidth={2} dot={{ r: 3 }} />
-                  <Line type="monotone" dataKey="golsAgainst" stroke="var(--color-golsAgainst)" strokeWidth={2} dot={{ r: 3 }} />
-                </LineChart>
-              </ChartContainer>
-            )}
-          </SectionCard>
+          <RecentMatches matches={stats.recentMatches} />
 
           <SectionCard title="Gols e Assistências" description="Top 10 — eficiência por partida disputada">
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-4">
@@ -262,51 +209,6 @@ export function DashboardOverview({ stats, readOnly = false }: { stats: Dashboar
               />
             </div>
           </SectionCard>
-
-          {/* Appearances */}
-          <SectionCard title="Mais Escalados" description="Presença no elenco">
-              {stats.topAppearances.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Sem escalações</p>
-              ) : (
-                <div className="flex flex-col gap-2.5">
-                  {stats.topAppearances.map((p, i) => (
-                    <div key={p.name} className="flex items-center gap-2">
-                      <span className="w-4 text-center text-xs font-bold text-muted-foreground">{i + 1}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="truncate text-sm font-medium text-foreground">{p.name}</p>
-                        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
-                          <div
-                            className="h-full rounded-full bg-primary"
-                            style={{ width: `${Math.min(100, (p.matches / stats.totalMatches) * 100)}%` }}
-                          />
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-bold text-foreground">{p.matches}</p>
-                        <p className="text-[10px] text-muted-foreground">{p.starterRate}% tit.</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-          </SectionCard>
-
-          {stats.topDuos.length > 0 && (
-            <SectionCard title="Duplas Produtivas" description="Assistência → gol">
-              <div className="flex flex-col gap-2">
-                {stats.topDuos.slice(0, 4).map((d, i) => (
-                  <div key={d.name} className="flex items-center justify-between gap-2">
-                    <span className="truncate text-sm text-foreground">
-                      <span className="font-medium text-muted-foreground">{i + 1}.</span> {d.name}
-                    </span>
-                    <span className="shrink-0 text-sm font-bold text-primary">{d.value}×</span>
-                  </div>
-                ))}
-              </div>
-            </SectionCard>
-          )}
-
-          <RecentMatches matches={stats.recentMatches} />
         </div>
       )}
     </div>

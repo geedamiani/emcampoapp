@@ -31,7 +31,6 @@ interface PlayerStats {
   id: string
   name: string
   position: string | null
-  whatsapp: string | null
   matches_played: number
   matches_starter: number
   total_matches: number
@@ -305,7 +304,7 @@ export function PlayersList({ players, ownerId, autoOpen = false, readOnly = fal
               <SheetTitle className="text-foreground">{editingPlayer ? 'Editar jogador' : 'Novo jogador'}</SheetTitle>
             </SheetHeader>
             <PlayerForm
-              player={editingPlayer ? { id: editingPlayer.id, name: editingPlayer.name, position: editingPlayer.position, whatsapp: editingPlayer.whatsapp } : undefined}
+              player={editingPlayer ? { id: editingPlayer.id, name: editingPlayer.name, position: editingPlayer.position } : undefined}
               ownerId={ownerId}
               onClose={() => setSheetOpen(false)}
               onRefresh={refreshData}
