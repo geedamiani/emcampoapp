@@ -35,7 +35,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   ] = await Promise.all([
     supabase.from('matches').select('*, opponent_teams(name)').eq('user_id', userId).order('match_date', { ascending: false }),
     dataClient.from('match_events').select('*, players!match_events_player_id_fkey(name)').eq('user_id', userId),
-    supabase.from('players').select('id, name').eq('user_id', userId),
+    supabase.from('players').select('id, name, position').eq('user_id', userId),
     dataClient.from('match_players').select('player_id, match_id').eq('user_id', userId),
   ])
 

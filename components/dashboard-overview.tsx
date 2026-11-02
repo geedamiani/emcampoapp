@@ -19,7 +19,7 @@ function SectionCard({ title, description, children, className }: {
   className?: string
 }) {
   return (
-    <div className={cn('rounded-xl border border-border bg-card p-4', className)}>
+    <div className={cn('rounded-xl border border-border bg-card p-3 sm:p-4', className)}>
       <div className="mb-3">
         <h3 className="text-sm font-semibold text-foreground">{title}</h3>
         {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
@@ -62,50 +62,75 @@ function AproveitamentoRing({ value }: { value: number }) {
   )
 }
 
-function formatRate(value: number) {
-  return value.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 2 })
+function formatRate(value: number, fractionDigits: 1 | 2 = 1) {
+  return value.toLocaleString('pt-BR', {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: 2,
+  })
 }
 
-function AttackRankingList({
+function formatStatValue(value: number) {
+  if (Number.isInteger(value)) return value.toLocaleString('pt-BR')
+  return value.toLocaleString('pt-BR', { maximumFractionDigits: 2 })
+}
+
+function RankingColumn({
   title,
   accentClass,
   barClass,
   items,
   emptyMessage,
+  showMatches = true,
+  valueCaption = 'rate',
+  rateDigits = 1,
 }: {
   title: string
   accentClass: string
   barClass: string
   items: PlayerRateStat[]
   emptyMessage: string
+  /** Second line under the name, e.g. "24 Jogos". */
+  showMatches?: boolean
+  /** Small text under the total: per-match rate, or "jogo"/"jogos". */
+  valueCaption?: 'rate' | 'unit'
+  rateDigits?: 1 | 2
 }) {
-  const max = items[0]?.value ?? 1
+  const max = Math.max(...items.map(item => item.value), 0)
+  const scale = max > 0 ? max : 1
 
   return (
-    <div>
-      <p className={cn('mb-2 text-xs font-semibold uppercase tracking-wide', accentClass)}>{title}</p>
+    <div className="min-w-0">
+      <p className={cn('mb-1.5 text-[10px] font-semibold uppercase leading-tight tracking-wide sm:mb-2 sm:text-xs', accentClass)}>
+        {title}
+      </p>
       {items.length === 0 ? (
-        <p className="text-xs text-muted-foreground">{emptyMessage}</p>
+        <p className="text-[11px] leading-snug text-muted-foreground sm:text-xs">{emptyMessage}</p>
       ) : (
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-0.5 sm:gap-1">
           {items.map((player, i) => (
-            <div key={player.name} className="relative overflow-hidden rounded-lg px-1 py-1.5">
+            <div key={player.id ?? `${player.name}-${i}`} className="relative overflow-hidden rounded-md px-0.5 py-1 sm:rounded-lg sm:px-1 sm:py-1.5">
               <div
-                className={cn('absolute inset-y-0 left-0 rounded-lg opacity-60', barClass)}
-                style={{ width: `${Math.max(8, (player.value / max) * 100)}%` }}
+                className={cn('absolute inset-y-0 left-0 rounded-md opacity-60 sm:rounded-lg', barClass)}
+                style={{ width: `${Math.max(8, (player.value / scale) * 100)}%` }}
               />
-              <div className="relative flex items-center gap-2">
-                <span className="w-5 shrink-0 text-center text-xs font-bold text-muted-foreground">{i + 1}</span>
+              <div className="relative flex min-w-0 items-center gap-1 sm:gap-2">
+                <span className="w-4 shrink-0 text-center text-[10px] font-bold tabular-nums text-muted-foreground sm:w-5 sm:text-xs">{i + 1}</span>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-foreground">{player.name}</p>
-                  <p className="text-[11px] text-muted-foreground">
-                    {player.matches} {player.matches === 1 ? 'Jogo' : 'Jogos'}
-                  </p>
+                  <p className="truncate text-[11px] font-medium leading-tight text-foreground sm:text-sm" title={player.name}>{player.name}</p>
+                  {showMatches && (
+                    <p className="truncate text-[10px] leading-tight text-muted-foreground sm:text-[11px]">
+                      {player.matches} {player.matches === 1 ? 'Jogo' : 'Jogos'}
+                    </p>
+                  )}
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className="text-sm font-bold tabular-nums text-foreground">{player.value}</p>
-                  <p className="text-[10px] tabular-nums text-muted-foreground">
-                    {player.matches > 0 ? `${formatRate(player.perMatch)}/jogo` : '—'}
+                  <p className="text-[11px] font-bold tabular-nums leading-tight text-foreground sm:text-sm">
+                    {formatStatValue(player.value)}
+                  </p>
+                  <p className="whitespace-nowrap text-[9px] tabular-nums leading-tight text-muted-foreground sm:text-[10px]">
+                    {valueCaption === 'unit'
+                      ? (player.value === 1 ? 'jogo' : 'jogos')
+                      : player.matches > 0 ? `${formatRate(player.perMatch, rateDigits)}/jogo` : '—'}
                   </p>
                 </div>
               </div>
@@ -159,7 +184,7 @@ export function DashboardOverview({ stats, readOnly = false }: { stats: Dashboar
             {stats.form.length > 0 && (
               <div className="mt-4 border-t border-border pt-3">
                 <p className="mb-2 text-xs font-medium text-muted-foreground">Forma recente</p>
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-1 sm:gap-1.5">
                   {stats.form.map((f, i) => (
                     <div
                       key={`${f.date}-${i}`}
@@ -175,37 +200,58 @@ export function DashboardOverview({ stats, readOnly = false }: { stats: Dashboar
                 </div>
               </div>
             )}
-          </div>
-
-          {/* KPI grid */}
-          <div className="grid grid-cols-2 gap-2">
-            <StatCard
-              label="Saldo de gols"
-              value={stats.saldoGols >= 0 ? `+${stats.saldoGols}` : `${stats.saldoGols}`}
-              accent={stats.saldoGols >= 0 ? 'primary' : 'destructive'}
-            />
-            <StatCard label="Média marcados" value={stats.avgGolsFor} accent="primary" />
-            <StatCard label="Média sofridos" value={stats.avgGolsAgainst} accent="destructive" />
-            <StatCard label="Clean sheets" value={stats.cleanSheets} accent="muted" />
+            <div className="mt-4 grid grid-cols-2 gap-2 border-t border-border pt-3">
+              <StatCard
+                nested
+                label="Saldo de gols"
+                value={stats.saldoGols >= 0 ? `+${stats.saldoGols}` : `${stats.saldoGols}`}
+                accent={stats.saldoGols >= 0 ? 'primary' : 'destructive'}
+              />
+              <StatCard nested label="Média marcados" value={stats.avgGolsFor} accent="primary" />
+              <StatCard nested label="Média sofridos" value={stats.avgGolsAgainst} accent="destructive" />
+              <StatCard nested label="Clean sheets" value={stats.cleanSheets} accent="muted" />
+            </div>
           </div>
 
           <RecentMatches matches={stats.recentMatches} />
 
           <SectionCard title="Gols e Assistências" description="Top 10 — eficiência por partida disputada">
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-4">
-              <AttackRankingList
+            <div className="grid grid-cols-2 gap-2 sm:gap-4">
+              <RankingColumn
                 title="Artilheiros"
                 accentClass="text-primary"
                 barClass="bg-primary/10"
                 items={stats.topGoalScorers}
                 emptyMessage="Sem gols registrados"
               />
-              <AttackRankingList
+              <RankingColumn
                 title="Assistências"
                 accentClass="text-[hsl(var(--chart-4))]"
                 barClass="bg-[hsl(var(--chart-4))]/10"
                 items={stats.topAssistProviders}
                 emptyMessage="Sem assistências registradas"
+              />
+            </div>
+          </SectionCard>
+
+          <SectionCard title="Goleiros" description="Top 10 — partidas e gols sofridos">
+            <div className="grid grid-cols-2 gap-2 sm:gap-4">
+              <RankingColumn
+                title="Partidas"
+                accentClass="text-[hsl(var(--chart-2))]"
+                barClass="bg-[hsl(var(--chart-2))]/15"
+                items={stats.goalkeepersByMatches}
+                emptyMessage="Nenhum goleiro escalado"
+                showMatches={false}
+                valueCaption="unit"
+              />
+              <RankingColumn
+                title="Gols sofridos"
+                accentClass="text-destructive"
+                barClass="bg-destructive/10"
+                items={stats.goalkeepersByGoalsConceded}
+                emptyMessage="Nenhum goleiro escalado"
+                rateDigits={2}
               />
             </div>
           </SectionCard>

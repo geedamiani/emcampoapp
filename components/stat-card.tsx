@@ -6,6 +6,8 @@ interface StatCardProps {
   value: string | number
   icon?: React.ReactNode
   accent?: 'primary' | 'warning' | 'destructive' | 'muted'
+  /** Sits inside another card, so it drops the outer card chrome. */
+  nested?: boolean
 }
 
 const accentMap = {
@@ -15,16 +17,21 @@ const accentMap = {
   muted: 'bg-muted text-muted-foreground',
 }
 
-export function StatCard({ label, value, icon, accent = 'primary' }: StatCardProps) {
+export function StatCard({ label, value, icon, accent = 'primary', nested = false }: StatCardProps) {
   return (
-    <div className="flex items-center gap-3 rounded-xl bg-card p-4 border border-border">
+    <div className={cn(
+      'flex min-w-0 items-center gap-3',
+      nested
+        ? 'rounded-lg bg-muted/50 px-3 py-2.5'
+        : 'rounded-xl border border-border bg-card p-4',
+    )}>
       {icon && (
         <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-lg', accentMap[accent])}>
           {icon}
         </div>
       )}
       <div className="min-w-0">
-        <p className="text-xl font-bold text-foreground">{value}</p>
+        <p className={cn('font-bold tabular-nums text-foreground', nested ? 'text-lg' : 'text-xl')}>{value}</p>
         <p className="truncate text-xs text-muted-foreground">{label}</p>
       </div>
     </div>
