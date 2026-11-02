@@ -63,6 +63,8 @@ export type PlayerRateStat = {
   value: number
   matches: number
   perMatch: number
+  /** Goals conceded. Set on the goalkeeper list, where `value` is matches played. */
+  conceded?: number
 }
 
 /** Players registered as "Goleiro", ignoring case and surrounding spaces. */
@@ -110,9 +112,10 @@ function formatShortDate(dateStr: string) {
  * keeper was on the pitch for each goal, so an even split counts every
  * keeper who played without charging the same goal twice.
  *
- * "Partidas" ranks keepers by matches played, descending.
- * "Gols sofridos" ranks them by goals conceded, fewest first, and keeps the
- * average goals conceded per match. Each list is the top 10.
+ * The painel list ranks keepers by matches played, descending, and each row
+ * carries the goals conceded (`conceded`) and the average per match.
+ * A second list, fewest goals conceded first, is still returned for the
+ * same top 10.
  */
 function buildGoalkeeperRankings(
   players: PlayerRow[],
@@ -165,6 +168,7 @@ function buildGoalkeeperRankings(
       value: stat.matches,
       matches: stat.matches,
       perMatch: stat.perMatch,
+      conceded: stat.goalsConceded,
     }))
 
   const byGoalsConceded = [...stats]

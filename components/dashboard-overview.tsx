@@ -142,6 +142,51 @@ function RankingColumn({
   )
 }
 
+function concededLabel(value: number) {
+  const formatted = formatStatValue(value)
+  return value === 1 ? `${formatted} gol sofrido` : `${formatted} gols sofridos`
+}
+
+function GoalkeeperList({ items }: { items: PlayerRateStat[] }) {
+  const max = Math.max(...items.map(item => item.matches), 0)
+  const scale = max > 0 ? max : 1
+
+  if (items.length === 0) {
+    return <p className="text-xs text-muted-foreground">Nenhum goleiro escalado</p>
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      {items.map((player, i) => (
+        <div key={player.id ?? `${player.name}-${i}`} className="relative overflow-hidden rounded-lg px-1 py-1.5">
+          <div
+            className="absolute inset-y-0 left-0 rounded-lg bg-[hsl(var(--chart-2))]/15 opacity-60"
+            style={{ width: `${Math.max(8, (player.matches / scale) * 100)}%` }}
+          />
+          <div className="relative flex min-w-0 items-center gap-3">
+            <span className="w-5 shrink-0 text-center text-xs font-bold tabular-nums text-muted-foreground">{i + 1}</span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-foreground" title={player.name}>{player.name}</p>
+              <p className="truncate text-[11px] text-muted-foreground">{concededLabel(player.conceded ?? 0)}</p>
+            </div>
+            <div className="shrink-0 text-right">
+              <p className="text-sm font-bold tabular-nums leading-tight text-foreground">
+                {player.matches}
+                <span className="ml-1 text-[10px] font-medium text-muted-foreground">
+                  {player.matches === 1 ? 'jogo' : 'jogos'}
+                </span>
+              </p>
+              <p className="whitespace-nowrap text-[10px] tabular-nums leading-tight text-muted-foreground">
+                {player.matches > 0 ? `${formatRate(player.perMatch, 2)}/jogo` : '—'}
+              </p>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export function DashboardOverview({ stats, readOnly = false }: { stats: DashboardStats; readOnly?: boolean }) {
   const hasMatches = stats.totalMatches > 0
 
@@ -234,26 +279,8 @@ export function DashboardOverview({ stats, readOnly = false }: { stats: Dashboar
             </div>
           </SectionCard>
 
-          <SectionCard title="Goleiros" description="Top 10 — partidas e gols sofridos">
-            <div className="grid grid-cols-2 gap-2 sm:gap-4">
-              <RankingColumn
-                title="Partidas"
-                accentClass="text-[hsl(var(--chart-2))]"
-                barClass="bg-[hsl(var(--chart-2))]/15"
-                items={stats.goalkeepersByMatches}
-                emptyMessage="Nenhum goleiro escalado"
-                showMatches={false}
-                valueCaption="unit"
-              />
-              <RankingColumn
-                title="Gols sofridos"
-                accentClass="text-destructive"
-                barClass="bg-destructive/10"
-                items={stats.goalkeepersByGoalsConceded}
-                emptyMessage="Nenhum goleiro escalado"
-                rateDigits={2}
-              />
-            </div>
+          <SectionCard title="Goleiros" description="Top 10 — mais partidas, com gols sofridos">
+            <GoalkeeperList items={stats.goalkeepersByMatches} />
           </SectionCard>
         </div>
       )}
