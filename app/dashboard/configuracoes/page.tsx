@@ -10,7 +10,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redirect } from 'next/navigation'
+import { headers } from 'next/headers'
 import { InviteAdmins } from '@/components/invite-admins'
+import { TeamSlugForm } from '@/components/team-slug-form'
 import { getEffectiveOwnerId } from '@/lib/get-effective-owner'
 
 export default async function ConfiguracoesPage() {
@@ -25,6 +27,25 @@ export default async function ConfiguracoesPage() {
   let pending: { id: string; email: string; token: string; created_at: string; expires_at: string }[] = []
   let adminEmails: Record<string, string> = {}
   let migrationNeeded = false
+  let currentSlug: string | null = null
+  let slugMigrationNeeded = false
+
+  const { data: shareRow, error: shareError } = await supabase
+    .from('team_share')
+    .select('slug')
+    .eq('owner_id', ownerId)
+    .maybeSingle()
+  if (shareError) {
+    const missingSlug = shareError.code === '42703'
+      || shareError.code === 'PGRST204'
+      || shareError.message?.toLowerCase().includes('slug')
+    if (missingSlug) slugMigrationNeeded = true
+  } else {
+    currentSlug = shareRow?.slug ?? null
+  }
+
+  const headersList = await headers()
+  const shareHost = (headersList.get('x-forwarded-host') || headersList.get('host') || 'emcampoapp.vercel.app').split(',')[0].trim()
 
   const { data: adminsData, error: adminsError } = await supabase
     .from('team_admins')
@@ -136,8 +157,15 @@ export default async function ConfiguracoesPage() {
     <div className="mx-auto max-w-lg px-4 py-5">
       <div className="mb-5">
         <h1 className="text-lg font-semibold text-foreground">Configurações</h1>
-        <p className="text-sm text-muted-foreground">Gerencie usuários do seu time</p>
+        <p className="text-sm text-muted-foreground">Gerencie o endereço público e os usuários do seu time</p>
       </div>
+
+      <TeamSlugForm
+        ownerId={ownerId}
+        initialSlug={currentSlug}
+        host={shareHost}
+        migrationNeeded={slugMigrationNeeded}
+      />
 
       <InviteAdmins
         ownerId={ownerId}

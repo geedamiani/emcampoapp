@@ -11,6 +11,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getEffectiveOwnerId } from '@/lib/get-effective-owner'
+import { generateShareToken } from '@/lib/share'
+import { normalizeTeamSlug, slugEditError } from '@/lib/slug'
 
 function generateToken() {
   return Array.from(crypto.getRandomValues(new Uint8Array(32)))
@@ -71,6 +73,72 @@ export async function deletePendingInviteAction(
   const { error } = await supabase.from('pending_invites').delete().eq('id', inviteId).eq('owner_id', ownerId)
   if (error) return { success: false, error: error.message || 'Erro ao excluir convite.' }
   return { success: true }
+}
+
+export async function updateTeamSlugAction(
+  ownerId: string,
+  rawSlug: string
+): Promise<{ success: boolean; error?: string; slug?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { success: false, error: 'Faça login para continuar.' }
+
+  const effectiveOwner = await getEffectiveOwnerId(supabase, user.id)
+  if (effectiveOwner !== user.id || ownerId !== user.id) {
+    return { success: false, error: 'Permissão negada.' }
+  }
+
+  const slug = normalizeTeamSlug(rawSlug)
+  const formatError = slugEditError(slug, false)
+  if (formatError) return { success: false, error: formatError }
+
+  let admin
+  try {
+    admin = createAdminClient()
+  } catch {
+    return { success: false, error: 'Não foi possível salvar o endereço agora.' }
+  }
+
+  const { data: taken, error: takenError } = await admin
+    .from('team_share')
+    .select('owner_id')
+    .eq('slug', slug)
+    .maybeSingle()
+  if (takenError) {
+    return { success: false, error: 'Execute o script scripts/010_team_share_slug.sql no Supabase (SQL Editor) e tente novamente.' }
+  }
+  if (taken && taken.owner_id !== ownerId) {
+    return { success: false, error: 'Este endereço já está em uso.' }
+  }
+  if (taken && taken.owner_id === ownerId) {
+    return { success: true, slug }
+  }
+
+  const { data: own, error: ownError } = await supabase
+    .from('team_share')
+    .select('owner_id')
+    .eq('owner_id', ownerId)
+    .maybeSingle()
+  if (ownError) {
+    return { success: false, error: 'Execute o script scripts/010_team_share_slug.sql no Supabase (SQL Editor) e tente novamente.' }
+  }
+
+  if (own) {
+    const { error } = await supabase.from('team_share').update({ slug }).eq('owner_id', ownerId)
+    if (error) {
+      if (error.code === '23505') return { success: false, error: 'Este endereço já está em uso.' }
+      return { success: false, error: error.message || 'Erro ao salvar o endereço.' }
+    }
+    return { success: true, slug }
+  }
+
+  const token = generateShareToken()
+  const { error } = await supabase.from('team_share').insert({ owner_id: ownerId, token, slug })
+  if (error) {
+    if (error.code === '23505') return { success: false, error: 'Este endereço já está em uso.' }
+    return { success: false, error: error.message || 'Erro ao salvar o endereço.' }
+  }
+  return { success: true, slug }
 }
 
 export async function getAdminEmailsAction(
