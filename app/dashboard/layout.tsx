@@ -13,7 +13,7 @@ import { DashboardHeader } from '@/components/dashboard-header'
 import { WelcomeToast } from '@/components/welcome-toast'
 import { SemesterFilter } from '@/components/semester-filter'
 import { getEffectiveOwnerId } from '@/lib/get-effective-owner'
-import { getOrCreateShareToken } from '@/lib/share'
+import { getOrCreateShare } from '@/lib/share'
 import { getSemestersWithMatches, getDefaultSemester } from '@/lib/semester'
 
 export default async function DashboardLayout({
@@ -42,13 +42,13 @@ export default async function DashboardLayout({
       teamName = (user?.user_metadata?.team_name as string) || null
     }
 
-    const token = await getOrCreateShareToken(ownerId)
-    if (token) {
-      const headersList = await headers()
-      const host = headersList.get('host') || ''
-      const isLocalhost = host.startsWith('localhost') || host.startsWith('127.0.0.1')
-      const origin = process.env.NEXT_PUBLIC_APP_URL || (host ? `${isLocalhost ? 'http' : 'https'}://${host}` : '')
-      shareLink = origin ? `${origin}/t/${token}` : null
+    const headersList = await headers()
+    const host = headersList.get('host') || ''
+    const isLocalhost = host.startsWith('localhost') || host.startsWith('127.0.0.1')
+    const origin = process.env.NEXT_PUBLIC_APP_URL || (host ? `${isLocalhost ? 'http' : 'https'}://${host}` : '')
+    const share = await getOrCreateShare(ownerId, teamName || 'Meu Time')
+    if (share && origin) {
+      shareLink = `${origin}/${share.slug}`
     }
 
     const { data: matches } = await supabase

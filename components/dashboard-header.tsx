@@ -19,6 +19,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { ThemeToggleMenuItem } from '@/components/theme-toggle'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { useEffect, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
 import { toast } from 'sonner'
@@ -33,6 +40,26 @@ export function DashboardHeader({ teamName: serverTeamName, shareLink }: Dashboa
   const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
   const [mounted, setMounted] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
+
+  const displayLink = shareLink ? shareLink.replace(/^https?:\/\//, '') : ''
+
+  const copyShareLink = async () => {
+    if (!shareLink) return
+    try {
+      await navigator.clipboard.writeText(shareLink)
+    } catch {
+      const el = document.createElement('textarea')
+      el.value = shareLink
+      el.style.position = 'fixed'
+      el.style.opacity = '0'
+      document.body.appendChild(el)
+      el.select()
+      document.execCommand('copy')
+      document.body.removeChild(el)
+    }
+    toast.success('Link de visualização copiado!')
+  }
 
   useEffect(() => {
     setMounted(true)
@@ -66,33 +93,41 @@ export function DashboardHeader({ teamName: serverTeamName, shareLink }: Dashboa
         </div>
         <div className="flex items-center gap-1">
           {shareLink && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-muted-foreground hover:text-foreground"
-              onClick={async () => {
-                try {
-                  await navigator.clipboard.writeText(shareLink)
-                } catch {
-                  const el = document.createElement('textarea')
-                  el.value = shareLink
-                  el.style.position = 'fixed'
-                  el.style.opacity = '0'
-                  document.body.appendChild(el)
-                  el.select()
-                  document.execCommand('copy')
-                  document.body.removeChild(el)
-                }
-                toast.success('Link de visualização copiado!')
-              }}
-              aria-label="Compartilhar link de visualização"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
-                <polyline points="16 6 12 2 8 6" />
-                <line x1="12" y1="2" x2="12" y2="15" />
-              </svg>
-            </Button>
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                onClick={() => setShareOpen(true)}
+                aria-label="Compartilhar link de visualização"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+                  <polyline points="16 6 12 2 8 6" />
+                  <line x1="12" y1="2" x2="12" y2="15" />
+                </svg>
+              </Button>
+              <Dialog open={shareOpen} onOpenChange={setShareOpen}>
+                <DialogContent className="max-w-sm border-border bg-card">
+                  <DialogHeader>
+                    <DialogTitle className="text-foreground">Link do time</DialogTitle>
+                    <DialogDescription>
+                      Quem tiver o link vê os números, sem login.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <p className="break-all rounded-lg border border-border bg-secondary px-3 py-2 font-mono text-sm text-foreground">
+                    {displayLink}
+                  </p>
+                  <Button type="button" className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={copyShareLink}>
+                    Copiar link
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    Links antigos em /t/ continuam abrindo esta página.
+                  </p>
+                </DialogContent>
+              </Dialog>
+            </>
           )}
           {mounted ? (
           <DropdownMenu>

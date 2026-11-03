@@ -50,15 +50,13 @@ const navItems = [
   },
 ]
 
-export function BottomNav() {
+export function BottomNav({ publicBaseHref = null }: { publicBaseHref?: string | null }) {
   const pathname = usePathname()
   const router = useRouter()
   const searchParams = useSearchParams()
   const [isPending, startTransition] = useTransition()
 
-  const isPublicView = pathname.startsWith('/t/')
-  const token = isPublicView ? pathname.split('/')[2] : null
-  const baseHref = token ? `/t/${token}` : '/dashboard'
+  const baseHref = publicBaseHref ?? '/dashboard'
 
   const navItemsWithHref = navItems.map((item) => {
     const path = item.href === '/dashboard' ? baseHref : `${baseHref}${item.href.replace('/dashboard', '')}`
