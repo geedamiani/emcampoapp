@@ -41,6 +41,16 @@ export async function saveLineup(
   const effectiveOwner = await getEffectiveOwnerId(supabase, user.id)
   if (effectiveOwner !== ownerId) return { error: 'Sem permissão para esta partida' }
 
+  const { data: matchRow, error: matchErr } = await supabase
+    .from('matches')
+    .select('status')
+    .eq('id', matchId)
+    .eq('user_id', ownerId)
+    .maybeSingle()
+  if (matchErr) return { error: matchErr.message }
+  if (!matchRow) return { error: 'Partida não encontrada' }
+  if (matchRow.status === 'scheduled') return { error: 'Registre o placar antes de escalar.' }
+
   // Step 2: Clear old data for this match
   const { error: delMpErr } = await supabase.from('match_players').delete().eq('match_id', matchId)
   if (delMpErr) return { error: delMpErr.message }

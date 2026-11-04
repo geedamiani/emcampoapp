@@ -8,6 +8,8 @@ export type MatchRow = {
   goals_for: number
   goals_against: number
   opponent_teams: { name: string } | null
+  /** Scheduled fixtures are ignored. Missing status counts as played. */
+  status?: string | null
 }
 
 export type EventRow = {
@@ -201,9 +203,14 @@ export function buildDashboardStats(input: {
 }): DashboardStats {
   const { teamName, matches, events, players, matchPlayers, matchIdsInSemester } = input
 
-  const matchesInSemester = matches.filter(m => matchIdsInSemester.has(m.id))
-  const eventsInSemester = events.filter(e => matchIdsInSemester.has(e.match_id))
-  const matchPlayersInSemester = matchPlayers.filter(mp => matchIdsInSemester.has(mp.match_id))
+  // Scheduled matches never enter the period, even if the caller included their ids.
+  const playedMatches = matches.filter(match => match.status !== 'scheduled')
+  const playedIds = new Set(playedMatches.map(match => match.id))
+  const activeIds = new Set([...matchIdsInSemester].filter(id => playedIds.has(id)))
+
+  const matchesInSemester = playedMatches.filter(m => activeIds.has(m.id))
+  const eventsInSemester = events.filter(e => activeIds.has(e.match_id))
+  const matchPlayersInSemester = matchPlayers.filter(mp => activeIds.has(mp.match_id))
 
   const playerNameById = Object.fromEntries(players.map(p => [p.id, p.name]))
   const totalMatches = matchesInSemester.length

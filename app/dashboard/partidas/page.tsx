@@ -11,10 +11,11 @@ import { createClient } from '@/lib/supabase/server'
 import { MatchesList } from '@/components/matches-list'
 import { getEffectiveOwnerId } from '@/lib/get-effective-owner'
 import { resolveSemester, isDateInSemester } from '@/lib/semester'
+import { isPlayedMatch, isScheduledMatch, playedMatchDates } from '@/lib/match-status'
 
 export const dynamic = 'force-dynamic'
 
-export default async function MatchesPage({ searchParams }: { searchParams: Promise<{ action?: string; semester?: string }> }) {
+export default async function MatchesPage({ searchParams }: { searchParams: Promise<{ action?: string; semester?: string; registrar?: string }> }) {
   const params = await searchParams
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -66,9 +67,17 @@ export default async function MatchesPage({ searchParams }: { searchParams: Prom
   ])
 
   const allMatches = matchesData || []
-  const matchDates = allMatches.map(m => m.match_date).filter(Boolean)
+  const scheduled = allMatches
+    .filter(isScheduledMatch)
+    .sort((a, b) => a.match_date.localeCompare(b.match_date) || a.id.localeCompare(b.id))
+  const played = allMatches.filter(isPlayedMatch)
+  const matchDates = playedMatchDates(played)
   const semester = resolveSemester(params.semester ?? null, matchDates)
-  const matches = allMatches.filter(m => isDateInSemester(m.match_date, semester))
+  const matches = [
+    ...scheduled,
+    ...played.filter(m => isDateInSemester(m.match_date, semester)),
+  ]
+  const scheduledIds = new Set(scheduled.map(match => match.id))
 
   const eventsByMatch = new Map<string, typeof matchEvents>()
   for (const e of matchEvents || []) {
@@ -83,7 +92,9 @@ export default async function MatchesPage({ searchParams }: { searchParams: Prom
     const list = playersByMatch.get(p.match_id) || []
     list.push(p)
     playersByMatch.set(p.match_id, list)
-    appearanceCounts.set(p.player_id, (appearanceCounts.get(p.player_id) ?? 0) + 1)
+    if (!scheduledIds.has(p.match_id)) {
+      appearanceCounts.set(p.player_id, (appearanceCounts.get(p.player_id) ?? 0) + 1)
+    }
   }
 
   // All-time appearances, not the semester filter, so an empty search lists regulars first.
@@ -106,6 +117,7 @@ export default async function MatchesPage({ searchParams }: { searchParams: Prom
         players={playersWithAppearances}
         ownerId={ownerId}
         autoOpen={params.action === 'new'}
+        registrarMatchId={params.registrar ?? null}
       />
     </div>
   )
