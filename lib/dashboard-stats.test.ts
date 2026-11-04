@@ -163,4 +163,42 @@ assert.equal(withGoal.topGoalScorers[0]?.value, 1)
 assert.equal(withGoal.topAssistProviders[0]?.name, 'Diego')
 assert.equal(withGoal.goalkeepersByMatches.length, 0)
 
+const withScheduled = buildDashboardStats({
+  teamName: 'Hípica 40+',
+  matches: [
+    match('g1', 1, 0),
+    { ...match('sched', 9, 8, '2026-03-02', 'Futuro'), status: 'scheduled' },
+  ],
+  events: [
+    {
+      player_id: 'out',
+      event_type: 'goal',
+      assistant_id: 'gk1',
+      match_id: 'g1',
+      players: { name: 'V19' },
+    },
+    {
+      player_id: 'out',
+      event_type: 'goal',
+      assistant_id: null,
+      match_id: 'sched',
+      players: { name: 'V19' },
+    },
+  ],
+  players,
+  matchPlayers: [
+    { match_id: 'g1', player_id: 'out' },
+    { match_id: 'sched', player_id: 'gk1' },
+  ],
+  matchIdsInSemester: new Set(['g1', 'sched']),
+})
+assert.equal(withScheduled.totalMatches, 1)
+assert.equal(withScheduled.wins, 1)
+assert.equal(withScheduled.golsMarcados, 1)
+assert.equal(withScheduled.golsContra, 0)
+assert.equal(withScheduled.recentMatches.length, 1)
+assert.equal(withScheduled.recentMatches[0]?.id, 'g1')
+assert.equal(withScheduled.topGoalScorers[0]?.value, 1)
+assert.equal(withScheduled.goalkeepersByMatches.length, 0)
+
 console.log('dashboard-stats tests passed')

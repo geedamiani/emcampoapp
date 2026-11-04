@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/server'
 import { PlayersList } from '@/components/players-list'
 import { getEffectiveOwnerId } from '@/lib/get-effective-owner'
 import { resolveSemester, isDateInSemester } from '@/lib/semester'
+import { isPlayedMatch, playedMatchDates } from '@/lib/match-status'
 
 export default async function PlayersPage({ searchParams }: { searchParams: Promise<{ action?: string; semester?: string }> }) {
   const params = await searchParams
@@ -28,12 +29,13 @@ export default async function PlayersPage({ searchParams }: { searchParams: Prom
     supabase.from('players').select('id, name, position').eq('user_id', ownerId).order('name'),
     supabase.from('match_players').select('*').eq('user_id', ownerId),
     supabase.from('match_events').select('player_id, event_type, assistant_id, match_id').eq('user_id', ownerId),
-    supabase.from('matches').select('id, match_date').eq('user_id', ownerId).order('match_date', { ascending: false }),
+    supabase.from('matches').select('id, match_date, status').eq('user_id', ownerId).order('match_date', { ascending: false }),
   ])
 
-  const matchDates = (matches || []).map(m => m.match_date).filter(Boolean)
+  const playedMatches = (matches || []).filter(isPlayedMatch)
+  const matchDates = playedMatchDates(playedMatches)
   const semester = resolveSemester(params.semester ?? null, matchDates)
-  const matchesInSemester = (matches || []).filter(m => isDateInSemester(m.match_date, semester))
+  const matchesInSemester = playedMatches.filter(m => isDateInSemester(m.match_date, semester))
   const matchIdsInSemester = new Set(matchesInSemester.map(m => m.id))
 
   const totalMatches = matchesInSemester.length

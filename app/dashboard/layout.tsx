@@ -15,6 +15,7 @@ import { SemesterFilter } from '@/components/semester-filter'
 import { getEffectiveOwnerId } from '@/lib/get-effective-owner'
 import { getOrCreateShare } from '@/lib/share'
 import { getSemestersWithMatches, getDefaultSemester } from '@/lib/semester'
+import { playedMatchDates } from '@/lib/match-status'
 
 export default async function DashboardLayout({
   children,
@@ -53,9 +54,9 @@ export default async function DashboardLayout({
 
     const { data: matches } = await supabase
       .from('matches')
-      .select('match_date')
+      .select('match_date, status')
       .eq('user_id', ownerId)
-    const matchDates = (matches || []).map(m => m.match_date).filter(Boolean)
+    const matchDates = playedMatchDates(matches || [])
     availableSemesters = getSemestersWithMatches(matchDates)
     defaultSemester = getDefaultSemester(matchDates)
   }

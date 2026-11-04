@@ -8,6 +8,7 @@ import { DashboardOverview } from '@/components/dashboard-overview'
 import { getEffectiveOwnerId } from '@/lib/get-effective-owner'
 import { resolveSemester, isDateInSemester } from '@/lib/semester'
 import { buildDashboardStats } from '@/lib/dashboard-stats'
+import { buildNextMatch, isPlayedMatch, playedMatchDates } from '@/lib/match-status'
 
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ semester?: string }> }) {
   const params = await searchParams
@@ -39,10 +40,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     dataClient.from('match_players').select('player_id, match_id').eq('user_id', userId),
   ])
 
-  const matchDates = (matches || []).map(m => m.match_date).filter(Boolean)
+  const allMatches = matches || []
+  const playedMatches = allMatches.filter(isPlayedMatch)
+  const matchDates = playedMatchDates(allMatches)
   const semester = resolveSemester(params.semester ?? null, matchDates)
-  const matchesInSemester = (matches || []).filter(m => isDateInSemester(m.match_date, semester))
+  const matchesInSemester = playedMatches.filter(m => isDateInSemester(m.match_date, semester))
   const matchIdsInSemester = new Set(matchesInSemester.map(m => m.id))
+  const nextMatch = buildNextMatch(allMatches)
 
   let teamName = (user?.user_metadata?.team_name as string) || 'Meu Time'
   try {
@@ -56,12 +60,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
 
   const stats = buildDashboardStats({
     teamName,
-    matches: matches || [],
+    matches: allMatches,
     events: events || [],
     players: players || [],
     matchPlayers: matchPlayers || [],
     matchIdsInSemester,
   })
 
-  return <DashboardOverview stats={stats} />
+  return <DashboardOverview stats={stats} nextMatch={nextMatch} semester={semester} />
 }

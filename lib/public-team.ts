@@ -10,6 +10,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { buildDashboardStats } from '@/lib/dashboard-stats'
 import { isDateInSemester, resolveSemester } from '@/lib/semester'
 import { isSlugFormat } from '@/lib/slug'
+import { buildNextMatch, isPlayedMatch, playedMatchDates, type NextMatchModel } from '@/lib/match-status'
 
 export type PublicSearchParams = Record<string, string | string[] | undefined>
 
@@ -71,7 +72,17 @@ function isStarter(row: { was_starter?: boolean | null; starter?: boolean | null
   return Boolean(row.was_starter ?? row.starter)
 }
 
-export async function loadPublicOverview(ownerId: string, searchParams: PublicSearchParams) {
+/**
+ * Public overview for one owner, after the slug has already been resolved.
+ *
+ * The service role reads that owner's matches, including status = scheduled.
+ * Anon still has no policy on public.matches. Only the single next fixture is
+ * returned to the page. Scheduled rows are left out of the stats.
+ */
+export async function loadPublicOverview(
+  ownerId: string,
+  searchParams: PublicSearchParams,
+): Promise<{ stats: ReturnType<typeof buildDashboardStats>; nextMatch: NextMatchModel | null }> {
   const admin = createAdminClient()
   const { data: ownerUser } = await admin.auth.admin.getUserById(ownerId)
   const teamName = (ownerUser?.user?.user_metadata?.team_name as string) || 'Meu Time'
@@ -88,19 +99,24 @@ export async function loadPublicOverview(ownerId: string, searchParams: PublicSe
     admin.from('match_players').select('player_id, match_id').eq('user_id', ownerId),
   ])
 
-  const matchDates = (matches || []).map((match) => match.match_date).filter(Boolean)
+  const allMatches = matches || []
+  const playedMatches = allMatches.filter(isPlayedMatch)
+  const matchDates = playedMatchDates(allMatches)
   const semester = resolveSemester(semesterFrom(searchParams), matchDates)
-  const matchesInSemester = (matches || []).filter((match) => isDateInSemester(match.match_date, semester))
+  const matchesInSemester = playedMatches.filter((match) => isDateInSemester(match.match_date, semester))
   const matchIdsInSemester = new Set(matchesInSemester.map((match) => match.id))
 
-  return buildDashboardStats({
-    teamName,
-    matches: matches || [],
-    events: events || [],
-    players: players || [],
-    matchPlayers: matchPlayers || [],
-    matchIdsInSemester,
-  })
+  return {
+    stats: buildDashboardStats({
+      teamName,
+      matches: allMatches,
+      events: events || [],
+      players: players || [],
+      matchPlayers: matchPlayers || [],
+      matchIdsInSemester,
+    }),
+    nextMatch: buildNextMatch(allMatches),
+  }
 }
 
 export async function loadPublicPlayers(ownerId: string, searchParams: PublicSearchParams) {
@@ -114,12 +130,13 @@ export async function loadPublicPlayers(ownerId: string, searchParams: PublicSea
     admin.from('players').select('id, name, position').eq('user_id', ownerId).order('name'),
     admin.from('match_players').select('*').eq('user_id', ownerId),
     admin.from('match_events').select('player_id, event_type, assistant_id, match_id').eq('user_id', ownerId),
-    admin.from('matches').select('id, match_date').eq('user_id', ownerId).order('match_date', { ascending: false }),
+    admin.from('matches').select('id, match_date, status').eq('user_id', ownerId).order('match_date', { ascending: false }),
   ])
 
-  const matchDates = (matches || []).map((match) => match.match_date).filter(Boolean)
+  const playedMatches = (matches || []).filter(isPlayedMatch)
+  const matchDates = playedMatchDates(playedMatches)
   const semester = resolveSemester(semesterFrom(searchParams), matchDates)
-  const matchesInSemester = (matches || []).filter((match) => isDateInSemester(match.match_date, semester))
+  const matchesInSemester = playedMatches.filter((match) => isDateInSemester(match.match_date, semester))
   const matchIdsInSemester = new Set(matchesInSemester.map((match) => match.id))
   const totalMatches = matchesInSemester.length
 
@@ -157,10 +174,10 @@ export async function loadPublicMatches(ownerId: string, searchParams: PublicSea
     admin.from('match_players').select('*').eq('user_id', ownerId),
   ])
 
-  const allMatches = matchesData || []
-  const matchDates = allMatches.map((match) => match.match_date).filter(Boolean)
+  const playedMatches = (matchesData || []).filter(isPlayedMatch)
+  const matchDates = playedMatchDates(playedMatches)
   const semester = resolveSemester(semesterFrom(searchParams), matchDates)
-  const matches = allMatches.filter((match) => isDateInSemester(match.match_date, semester))
+  const matches = playedMatches.filter((match) => isDateInSemester(match.match_date, semester))
 
   const eventsByMatch = new Map<string, NonNullable<typeof matchEvents>>()
   for (const event of matchEvents || []) {
@@ -192,16 +209,18 @@ export async function loadPublicOpponents(ownerId: string, searchParams: PublicS
     { data: opponents },
     { data: matches },
   ] = await Promise.all([
-    admin.from('opponent_teams').select('*, matches(goals_for, goals_against, match_date)').eq('user_id', ownerId).order('name'),
-    admin.from('matches').select('match_date').eq('user_id', ownerId),
+    admin.from('opponent_teams').select('*, matches(goals_for, goals_against, match_date, status)').eq('user_id', ownerId).order('name'),
+    admin.from('matches').select('match_date, status').eq('user_id', ownerId),
   ])
 
-  const matchDates = (matches || []).map((match) => match.match_date).filter(Boolean)
+  const matchDates = playedMatchDates(matches || [])
   const semester = resolveSemester(semesterFrom(searchParams), matchDates)
 
   return (opponents || []).map((opponent) => ({
     ...opponent,
-    matches: (opponent.matches || []).filter((match: { match_date?: string }) => match.match_date && isDateInSemester(match.match_date, semester)),
+    matches: (opponent.matches || []).filter((match: { match_date?: string; status?: string | null }) => (
+      Boolean(match.match_date) && isPlayedMatch(match) && isDateInSemester(match.match_date as string, semester)
+    )),
   }))
 }
 
@@ -209,7 +228,7 @@ export async function loadPublicMatchDates(ownerId: string): Promise<string[]> {
   const admin = createAdminClient()
   const { data: matches } = await admin
     .from('matches')
-    .select('match_date')
+    .select('match_date, status')
     .eq('user_id', ownerId)
-  return (matches || []).map((match) => match.match_date).filter(Boolean)
+  return playedMatchDates(matches || [])
 }

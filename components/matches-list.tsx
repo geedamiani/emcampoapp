@@ -7,7 +7,7 @@
  */
 'use client'
 
-import { useState, useEffect, useTransition } from 'react'
+import { useState, useEffect, useRef, useTransition } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
@@ -16,6 +16,13 @@ import { MatchForm } from '@/components/match-form'
 import { MatchLineup } from '@/components/match-lineup'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import {
+  formatDayMonth,
+  isMatchDayOrPast,
+  isOverdueMatch,
+  isScheduledMatch,
+  todayISO,
+} from '@/lib/match-status'
 import { LoadingOverlay } from '@/components/loading-overlay'
 import {
   AlertDialog,
@@ -57,9 +64,11 @@ interface MatchEvent {
 interface Match {
   id: string
   opponent_id?: string
+  opponent_team_id?: string
   match_date: string
   goals_for: number
   goals_against: number
+  status?: string | null
   opponent_teams: { name: string } | null
   match_events: MatchEvent[]
   match_players: MatchPlayer[]
@@ -132,6 +141,81 @@ function getLineupEntries(matchPlayers: MatchPlayer[], players: Player[], starte
     .map(({ name, count }) => ({ name, count }))
 }
 
+function listSummary(matches: Match[]) {
+  const scheduled = matches.filter(isScheduledMatch).length
+  const played = matches.length - scheduled
+  const playedLabel = `${played} ${played === 1 ? 'partida registrada' : 'partidas registradas'}`
+  if (scheduled === 0) return playedLabel
+  const scheduledLabel = `${scheduled} ${scheduled === 1 ? 'agendada' : 'agendadas'}`
+  return `${playedLabel} · ${scheduledLabel}`
+}
+
+function ScheduledMatchCard({
+  match,
+  today,
+  onRegister,
+  onEdit,
+  onDelete,
+  readOnly = false,
+}: {
+  match: Match
+  today: string
+  onRegister: () => void
+  onEdit: () => void
+  onDelete: () => void
+  readOnly?: boolean
+}) {
+  const canRegister = isMatchDayOrPast(match.match_date, today)
+  const overdue = isOverdueMatch(match.match_date, today)
+  return (
+    <div className="rounded-xl border border-[hsl(var(--warning))]/70 bg-card p-3">
+      <div className="flex items-center gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[hsl(var(--warning))]/20 text-sm font-bold text-[hsl(var(--warning))]">
+          ?
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-foreground">
+            vs {match.opponent_teams?.name || 'Desconhecido'}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {formatDayMonth(match.match_date)} · {overdue ? 'atrasada' : 'aguardando placar'}
+          </p>
+        </div>
+      </div>
+      {!readOnly && (
+      <div className="mt-3 flex flex-col gap-2">
+        {canRegister ? (
+          <Button
+            type="button"
+            className="h-11 w-full bg-primary text-primary-foreground hover:bg-primary/90"
+            onClick={onRegister}
+          >
+            Registrar placar
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 w-full border-border bg-transparent text-muted-foreground"
+            onClick={onEdit}
+          >
+            Editar
+          </Button>
+        )}
+        <Button
+          type="button"
+          variant="outline"
+          className="h-11 w-full border-border bg-transparent text-muted-foreground hover:text-destructive"
+          onClick={onDelete}
+        >
+          Excluir
+        </Button>
+      </div>
+      )}
+    </div>
+  )
+}
+
 function EventLine({ label, entries, color }: { label: string; entries: { name: string; count: number }[]; color: string }) {
   if (entries.length === 0) return null
   return (
@@ -185,6 +269,7 @@ export function MatchesList({
   ownerId,
   autoOpen = false,
   readOnly = false,
+  registrarMatchId = null,
 }: {
   matches: Match[]
   opponents: OpponentTeam[]
@@ -192,9 +277,11 @@ export function MatchesList({
   ownerId: string
   autoOpen?: boolean
   readOnly?: boolean
+  registrarMatchId?: string | null
 }) {
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editingMatch, setEditingMatch] = useState<Match | undefined>(undefined)
+  const [formMode, setFormMode] = useState<'create' | 'edit' | 'score'>('create')
   const [lineupSheetOpen, setLineupSheetOpen] = useState(false)
   const [lineupMatch, setLineupMatch] = useState<Match | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -203,13 +290,32 @@ export function MatchesList({
   const [currentPlayers, setCurrentPlayers] = useState(players)
   const [isPending, startTransition] = useTransition()
   const router = useRouter()
+  const today = todayISO()
+  const openedRegistrar = useRef<string | null>(null)
+
+  const openForm = (match: Match | undefined, mode: 'create' | 'edit' | 'score') => {
+    setEditingMatch(match)
+    setFormMode(mode)
+    setSheetOpen(true)
+  }
 
   useEffect(() => {
     if (autoOpen) {
       setEditingMatch(undefined)
+      setFormMode('create')
       setSheetOpen(true)
     }
   }, [autoOpen])
+
+  useEffect(() => {
+    if (!registrarMatchId || openedRegistrar.current === registrarMatchId) return
+    const target = matches.find(match => match.id === registrarMatchId && isScheduledMatch(match))
+    if (!target) return
+    openedRegistrar.current = registrarMatchId
+    setEditingMatch(target)
+    setFormMode('score')
+    setSheetOpen(true)
+  }, [registrarMatchId, matches])
 
   useEffect(() => {
     setCurrentPlayers(prev => {
@@ -244,13 +350,13 @@ export function MatchesList({
     <>
       {isPending && <LoadingOverlay />}
 
-      <div className="mb-4 flex items-center justify-between">
-        <div>
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div className="min-w-0">
           <h1 className="text-lg font-semibold text-foreground">Partidas</h1>
-          <p className="text-sm text-muted-foreground">{matches.length} {matches.length === 1 ? 'partida registrada' : 'partidas registradas'}</p>
+          <p className="text-sm text-muted-foreground">{listSummary(matches)}</p>
         </div>
         {!readOnly && (
-        <Button onClick={() => { setEditingMatch(undefined); setSheetOpen(true) }} size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90">
+        <Button onClick={() => openForm(undefined, 'create')} size="sm" className="shrink-0 bg-primary text-primary-foreground hover:bg-primary/90">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-1.5">
             <path d="M12 5v14M5 12h14" />
           </svg>
@@ -270,6 +376,20 @@ export function MatchesList({
       ) : (
         <div className="flex flex-col gap-2">
           {matches.map((match) => {
+            if (isScheduledMatch(match)) {
+              return (
+                <ScheduledMatchCard
+                  key={match.id}
+                  match={match}
+                  today={today}
+                  onRegister={() => openForm(match, 'score')}
+                  onEdit={() => openForm(match, 'edit')}
+                  onDelete={() => setDeleteId(match.id)}
+                  readOnly={readOnly}
+                />
+              )
+            }
+
             const result = getResultInfo(match.goals_for, match.goals_against)
             const isExpanded = expandedId === match.id
             const playerCount = match.match_players?.length || 0
@@ -341,7 +461,7 @@ export function MatchesList({
                         size="sm"
                         variant="ghost"
                         className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                        onClick={(e) => { e.stopPropagation(); setEditingMatch(match); setSheetOpen(true) }}
+                        onClick={(e) => { e.stopPropagation(); openForm(match, 'edit') }}
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
@@ -374,15 +494,29 @@ export function MatchesList({
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
         <SheetContent side="bottom" className="bg-background border-border rounded-t-2xl max-h-[85svh] overflow-y-auto">
           <SheetHeader className="mb-4">
-            <SheetTitle className="text-foreground">{editingMatch ? 'Editar partida' : 'Nova partida'}</SheetTitle>
+            <SheetTitle className="text-foreground">
+              {formMode === 'score' ? 'Registrar placar' : editingMatch ? 'Editar partida' : 'Nova partida'}
+            </SheetTitle>
           </SheetHeader>
           <MatchForm
             opponents={currentOpponents}
             match={editingMatch}
+            mode={formMode === 'score' ? 'score' : 'edit'}
             ownerId={ownerId}
             onClose={() => setSheetOpen(false)}
             onOpponentsChange={setCurrentOpponents}
             onRefresh={refreshData}
+            onSaved={(result) => {
+              if (formMode === 'score' && result.status === 'played' && editingMatch) {
+                setLineupMatch({
+                  ...editingMatch,
+                  status: 'played',
+                  goals_for: result.goalsFor,
+                  goals_against: result.goalsAgainst,
+                })
+                setLineupSheetOpen(true)
+              }
+            }}
           />
         </SheetContent>
       </Sheet>

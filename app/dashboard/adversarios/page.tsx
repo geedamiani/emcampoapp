@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { OpponentsList } from '@/components/opponents-list'
 import { getEffectiveOwnerId } from '@/lib/get-effective-owner'
 import { resolveSemester, isDateInSemester } from '@/lib/semester'
+import { isPlayedMatch, playedMatchDates } from '@/lib/match-status'
 
 export default async function OpponentsPage({ searchParams }: { searchParams: Promise<{ semester?: string }> }) {
   const params = await searchParams
@@ -17,16 +18,16 @@ export default async function OpponentsPage({ searchParams }: { searchParams: Pr
     { data: opponents },
     { data: matches },
   ] = await Promise.all([
-    supabase.from('opponent_teams').select('*, matches(goals_for, goals_against, match_date)').eq('user_id', ownerId).order('name'),
-    supabase.from('matches').select('match_date').eq('user_id', ownerId),
+    supabase.from('opponent_teams').select('*, matches(goals_for, goals_against, match_date, status)').eq('user_id', ownerId).order('name'),
+    supabase.from('matches').select('match_date, status').eq('user_id', ownerId),
   ])
 
-  const matchDates = (matches || []).map(m => m.match_date).filter(Boolean)
+  const matchDates = playedMatchDates(matches || [])
   const semester = resolveSemester(params.semester ?? null, matchDates)
 
   const opponentsFiltered = (opponents || []).map(opp => ({
     ...opp,
-    matches: (opp.matches || []).filter((m: { match_date?: string }) => m.match_date && isDateInSemester(m.match_date, semester)),
+    matches: (opp.matches || []).filter((m: { match_date?: string; status?: string | null }) => m.match_date && isPlayedMatch(m) && isDateInSemester(m.match_date, semester)),
   }))
 
   return (

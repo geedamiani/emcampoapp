@@ -5,6 +5,8 @@ import { StatCard } from '@/components/stat-card'
 import { RecentMatches } from '@/components/recent-matches'
 import { cn } from '@/lib/utils'
 import type { DashboardStats, PlayerRateStat } from '@/lib/dashboard-stats'
+import type { NextMatchModel } from '@/lib/match-status'
+import { NextMatchCard } from '@/components/next-match-card'
 
 const formColors = {
   V: 'bg-primary text-primary-foreground',
@@ -187,8 +189,21 @@ function GoalkeeperList({ items }: { items: PlayerRateStat[] }) {
   )
 }
 
-export function DashboardOverview({ stats, readOnly = false }: { stats: DashboardStats; readOnly?: boolean }) {
+export function DashboardOverview({
+  stats,
+  readOnly = false,
+  nextMatch = null,
+  semester,
+}: {
+  stats: DashboardStats
+  readOnly?: boolean
+  nextMatch?: NextMatchModel | null
+  semester?: string
+}) {
   const hasMatches = stats.totalMatches > 0
+  const nextMatchCard = nextMatch ? (
+    <NextMatchCard match={nextMatch} readOnly={readOnly} semester={semester} />
+  ) : null
 
   return (
     <div className="mx-auto max-w-lg px-4 py-5">
@@ -201,7 +216,9 @@ export function DashboardOverview({ stats, readOnly = false }: { stats: Dashboar
       )}
 
       {!hasMatches ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-16">
+        <div className="flex flex-col gap-4">
+          {nextMatchCard}
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-16">
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" className="mb-3 text-muted-foreground/40">
             <path d="M12 20V10" stroke="currentColor" strokeWidth="1.5" />
             <path d="M18 20V4" stroke="currentColor" strokeWidth="1.5" />
@@ -209,6 +226,7 @@ export function DashboardOverview({ stats, readOnly = false }: { stats: Dashboar
           </svg>
           <p className="text-sm font-medium text-foreground">Sem dados neste período</p>
           <p className="mt-1 text-xs text-muted-foreground">Registre partidas para ver estatísticas e gráficos.</p>
+          </div>
         </div>
       ) : (
         <div className="flex flex-col gap-4">
@@ -258,6 +276,7 @@ export function DashboardOverview({ stats, readOnly = false }: { stats: Dashboar
             </div>
           </div>
 
+          {nextMatchCard}
           <RecentMatches matches={stats.recentMatches} />
 
           <SectionCard title="Gols e Assistências" description="Top 10 — eficiência por partida disputada">
